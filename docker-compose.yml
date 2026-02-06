@@ -1,0 +1,58 @@
+﻿version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: hms-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: hms-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5052:80"
+    depends_on:
+      - db
+
+  backend:
+    build: ./backend
+    container_name: hms-backend
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+      - WATCHFILES_FORCE_POLLING=true
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    container_name: hms-frontend
+    env_file: .env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm install --no-audit --no-fund && rm -rf .next && npm run dev"
+
+volumes:
+  db_data:

@@ -1,0 +1,1 @@
+# hotel kiosk settings module
