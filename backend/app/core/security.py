@@ -1,23 +1,50 @@
 ﻿from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import secrets
 import uuid
 
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import jwt
+from jwt import InvalidTokenError
 
 from app.core.config import settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Dummy hash pre-computed at module load time for constant-time verification
+DUMMY_HASH = bcrypt.hashpw(b"dummy-password-never-used", bcrypt.gensalt(rounds=12))
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt with 12 rounds."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(password: str, password_hash: str) -> bool:
+    """
+    Verify a password against a hash using constant-time comparison.
+    
+    Uses bcrypt to compute the candidate hash and hmac.compare_digest
+    for constant-time comparison to prevent timing attacks.
+    """
+    candidate_hash = bcrypt.hashpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    return hmac.compare_digest(candidate_hash, password_hash.encode("utf-8"))
+
+
+def verify_password_constant_time(password: str, password_hash: str | None) -> bool:
+    """
+    Verify a password in constant time, preventing user enumeration.
+    
+    When password_hash is None (user doesn't exist), still runs bcrypt
+    against a dummy hash to match the timing of a real verification.
+    This prevents attackers from distinguishing between "user exists"
+    and "user doesn't exist" based on response time.
+    """
+    if password_hash is None:
+        # User doesn't exist - compute against dummy to match timing
+        bcrypt.hashpw(password.encode("utf-8"), DUMMY_HASH)
+        return False
+    return verify_password(password, password_hash)
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -31,7 +58,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 def decode_access_token(token: str) -> dict | None:
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
