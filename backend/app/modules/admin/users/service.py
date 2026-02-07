@@ -78,6 +78,7 @@ class AdminUserService:
 
         user = User(
             email=payload.email,
+            username=payload.email.split('@')[0],  # Extract username from email
             password_hash=hash_password(payload.password),
             first_name=payload.first_name,
             last_name=payload.last_name,
