@@ -183,9 +183,9 @@ async def me(
 @router.post("/password/change", response_model=PasswordChangeResponse)
 async def change_password(
     payload: PasswordChangeRequest,
+    request: Request,
     current_user = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    request: Request = None,
 ):
     """Change the current user's password. Revokes all active sessions."""
     service = AuthService(session, request)
@@ -207,10 +207,10 @@ async def change_password(
 @router.post("/password/reset", response_model=PasswordResetResponse)
 async def reset_password(
     payload: PasswordResetRequest,
+    request: Request,
     current_user = Depends(get_current_user),
     _: str = Depends(require_permission("admin:users:manage")),
     session: AsyncSession = Depends(get_session),
-    request: Request = None,
 ):
     """Admin resets another user's password. Returns a temporary password."""
     service = AuthService(session, request)
@@ -234,10 +234,10 @@ async def reset_password(
 @router.post("/users/invite", response_model=InviteUserResponse)
 async def invite_user(
     payload: InviteUserRequest,
+    request: Request,
     current_user = Depends(get_current_user),
     _: str = Depends(require_permission("admin:users:create")),
     session: AsyncSession = Depends(get_session),
-    request: Request = None,
 ):
     """Invite a new user with a temporary password."""
     service = AuthService(session, request)

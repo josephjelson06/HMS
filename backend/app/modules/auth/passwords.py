@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import secrets
 import string
 
@@ -64,7 +65,6 @@ def generate_temporary_password(length: int = 24) -> str:
             result[i] = char
     
     # Shuffle to avoid predictable positions
-    import random
     rng = random.SystemRandom()
     rng.shuffle(result)
     
