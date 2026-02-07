@@ -11,7 +11,9 @@ from jwt import InvalidTokenError
 from app.core.config import settings
 
 
-# Dummy hash pre-computed at module load time for constant-time verification
+# Dummy hash pre-computed at module load time for constant-time verification.
+# Must use same cost factor (12 rounds) as real hashes to ensure timing consistency.
+# Used when verifying passwords for non-existent users to prevent timing attacks.
 DUMMY_HASH = bcrypt.hashpw(b"dummy-password-never-used", bcrypt.gensalt(rounds=12))
 
 
@@ -42,7 +44,8 @@ def verify_password_constant_time(password: str, password_hash: str | None) -> b
     """
     if password_hash is None:
         # User doesn't exist - compute against dummy to match timing
-        bcrypt.hashpw(password.encode("utf-8"), DUMMY_HASH)
+        # Explicitly discard result as we only care about timing
+        _ = bcrypt.hashpw(password.encode("utf-8"), DUMMY_HASH)
         return False
     return verify_password(password, password_hash)
 
