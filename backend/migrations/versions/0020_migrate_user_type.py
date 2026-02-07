@@ -6,6 +6,7 @@ Create Date: 2026-02-07 00:00:00.000000
 
 """
 from alembic import op
+from sqlalchemy.exc import ProgrammingError
 
 revision = '0020_migrate_user_type'
 down_revision = '0019_rename_audit_columns'
@@ -21,7 +22,7 @@ def upgrade() -> None:
     # The constraint name may vary — use try/except
     try:
         op.drop_constraint('ck_users_user_type', 'users', type_='check')
-    except Exception:
+    except (ProgrammingError, Exception):
         pass
     op.create_check_constraint(
         'ck_users_user_type',
@@ -34,7 +35,7 @@ def downgrade() -> None:
     op.execute("UPDATE users SET user_type = 'admin' WHERE user_type = 'platform'")
     try:
         op.drop_constraint('ck_users_user_type', 'users', type_='check')
-    except Exception:
+    except (ProgrammingError, Exception):
         pass
     op.create_check_constraint(
         'ck_users_user_type',

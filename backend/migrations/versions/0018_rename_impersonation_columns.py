@@ -8,6 +8,7 @@ Create Date: 2026-02-07 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.exc import ProgrammingError
 
 revision = '0018_rename_impersonation_columns'
 down_revision = '0017_add_refresh_token_columns'
@@ -24,7 +25,7 @@ def upgrade() -> None:
     # (HMS uses 'target_tenant_id' — check and rename)
     try:
         op.alter_column('impersonation_sessions', 'target_tenant_id', new_column_name='tenant_id')
-    except Exception:
+    except (ProgrammingError, sa.exc.OperationalError):
         pass  # Column might already be named 'tenant_id'
 
     # Add refresh_token_family_id FK
@@ -44,7 +45,7 @@ def downgrade() -> None:
     op.drop_column('impersonation_sessions', 'refresh_token_family_id')
     try:
         op.alter_column('impersonation_sessions', 'tenant_id', new_column_name='target_tenant_id')
-    except Exception:
+    except (ProgrammingError, sa.exc.OperationalError):
         pass
     op.alter_column('impersonation_sessions', 'acting_as_user_id', new_column_name='target_user_id')
     op.alter_column('impersonation_sessions', 'actor_user_id', new_column_name='admin_user_id')
