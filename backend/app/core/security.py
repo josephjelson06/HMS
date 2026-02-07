@@ -1,6 +1,5 @@
 ﻿from datetime import datetime, timedelta, timezone
 import hashlib
-import hmac
 import secrets
 import uuid
 
@@ -26,11 +25,14 @@ def verify_password(password: str, password_hash: str) -> bool:
     """
     Verify a password against a hash using constant-time comparison.
     
-    Uses bcrypt to compute the candidate hash and hmac.compare_digest
-    for constant-time comparison to prevent timing attacks.
+    Uses bcrypt.checkpw for verification, which internally does constant-time
+    comparison to prevent timing attacks at the hash comparison level.
     """
-    candidate_hash = bcrypt.hashpw(password.encode("utf-8"), password_hash.encode("utf-8"))
-    return hmac.compare_digest(candidate_hash, password_hash.encode("utf-8"))
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
+        # Invalid hash format
+        return False
 
 
 def verify_password_constant_time(password: str, password_hash: str | None) -> bool:
