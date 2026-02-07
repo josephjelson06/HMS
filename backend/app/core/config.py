@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_domain: str | None = None
     cookie_samesite: str = "lax"
+    # cors_origins is also used as the CSRF allowed origins list
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
     seed_data: bool = True
     reports_storage_path: str = "storage/reports"
