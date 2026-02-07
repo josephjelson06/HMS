@@ -6,6 +6,9 @@ import string
 
 MIN_PASSWORD_LENGTH = 12
 
+# Module-level SystemRandom instance for efficient shuffling
+_system_random = random.SystemRandom()
+
 
 class PasswordValidationError(ValueError):
     """Raised when a password does not meet strength requirements."""
@@ -65,7 +68,6 @@ def generate_temporary_password(length: int = 24) -> str:
             result[i] = char
     
     # Shuffle to avoid predictable positions
-    rng = random.SystemRandom()
-    rng.shuffle(result)
+    _system_random.shuffle(result)
     
     return "".join(result)
