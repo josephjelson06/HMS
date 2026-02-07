@@ -31,7 +31,7 @@ async def append_audit_log(
     # Build kwargs, mapping new names to old column names in the model
     kwargs: dict[str, Any] = {
         "action": action,
-        "changes": metadata or {},  # Map metadata -> changes
+        "changes": metadata if metadata is not None else {},  # Map metadata -> changes
     }
     
     if tenant_id is not None:

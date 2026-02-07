@@ -49,7 +49,8 @@ async def test_audit_logging_end_to_end():
         assert True
         
         # Verify context is still available
-        retrieved_ctx = audit_event_stub.__globals__["get_audit_runtime_context"]()
+        from app.modules.audit.context import get_audit_runtime_context
+        retrieved_ctx = get_audit_runtime_context()
         assert retrieved_ctx is not None
         assert retrieved_ctx.tenant_id == tenant_id
         assert retrieved_ctx.actor_user_id == user_id

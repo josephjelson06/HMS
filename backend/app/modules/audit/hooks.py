@@ -55,7 +55,7 @@ async def audit_event_stub(
         tenant_id=tenant_id or (ctx.tenant_id if ctx else None),
         actor_user_id=actor_user_id or (ctx.actor_user_id if ctx else None),
         acting_as_user_id=acting_as_user_id or (ctx.acting_as_user_id if ctx else None),
-        metadata=metadata or {},
+        metadata=metadata if metadata is not None else {},
         resource_type=resource_type,
         resource_id=resource_id,
         ip_address=ctx.ip_address if ctx else None,
