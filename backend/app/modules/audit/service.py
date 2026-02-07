@@ -24,22 +24,22 @@ async def append_audit_log(
 ) -> AuditLog:
     """Insert a single audit log row.
     
-    This function uses HMS's existing AuditLog model with both AuthModule fields
-    (actor_user_id, acting_as_user_id, metadata) and HMS-specific fields
-    (resource_type, resource_id, ip_address, user_agent).
+    This function uses HMS's existing AuditLog model. It maps the AuthModule-style
+    field names (actor_user_id, acting_as_user_id, metadata) to the current HMS model
+    field names (user_id, impersonated_by, changes) until PR 5's migration is applied.
     """
-    # Build kwargs, only including fields that exist on the model
+    # Build kwargs, mapping new names to old column names in the model
     kwargs: dict[str, Any] = {
         "action": action,
-        "metadata": metadata or {},
+        "changes": metadata or {},  # Map metadata -> changes
     }
     
     if tenant_id is not None:
         kwargs["tenant_id"] = tenant_id
     if actor_user_id is not None:
-        kwargs["actor_user_id"] = actor_user_id
+        kwargs["user_id"] = actor_user_id  # Map actor_user_id -> user_id
     if acting_as_user_id is not None:
-        kwargs["acting_as_user_id"] = acting_as_user_id
+        kwargs["impersonated_by"] = acting_as_user_id  # Map acting_as_user_id -> impersonated_by
     if ip_address is not None:
         kwargs["ip_address"] = ip_address
     if user_agent is not None:
@@ -67,13 +67,14 @@ async def list_audit_logs(
     """Query audit logs with optional filters.
     
     This can be used by the existing admin/audit and hotel/audit routers.
+    Maps actor_user_id to the current model's user_id field.
     """
     stmt = select(AuditLog).order_by(desc(AuditLog.created_at))
 
     if tenant_id is not None:
         stmt = stmt.where(AuditLog.tenant_id == tenant_id)
     if actor_user_id is not None:
-        stmt = stmt.where(AuditLog.actor_user_id == actor_user_id)
+        stmt = stmt.where(AuditLog.user_id == actor_user_id)  # Map to user_id
     if action is not None:
         stmt = stmt.where(AuditLog.action == action)
 
