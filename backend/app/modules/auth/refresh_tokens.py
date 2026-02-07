@@ -9,7 +9,8 @@ lifecycle management. Key features:
 - Structured token format: rt1.{tenant_id}.{random} allows pre-DB tenant extraction
 - On logout, the family is revoked (not just the single token)
 
-Reference: https://github.com/josephjelson06/AuthModule
+Based on OAuth 2.0 best practices for token rotation and reuse detection.
+See: RFC 6749, Section 10.4 and draft-ietf-oauth-security-topics
 """
 from __future__ import annotations
 

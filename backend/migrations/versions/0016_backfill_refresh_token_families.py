@@ -18,59 +18,39 @@ depends_on = None
 
 def upgrade() -> None:
     # For each existing refresh token without a family_id,
-    # create a family and assign it
-    # We'll create one family per token for simplicity since we can't reconstruct the rotation chain
+    # create a separate family (one family per token)
+    # We can't reconstruct the original rotation chains, so each token gets its own family
     op.execute("""
-        -- Insert a new family for each orphaned token
-        INSERT INTO refresh_token_families (tenant_id, user_id, created_by_user_id, created_at, updated_at)
-        SELECT DISTINCT rt.tenant_id, rt.user_id, rt.user_id, rt.issued_at, rt.issued_at
-        FROM refresh_tokens rt
-        WHERE rt.family_id IS NULL;
-        
-        -- Update refresh_tokens to link to the newly created families
-        -- This is a simplified approach: each existing token gets its own family
-        WITH token_family_mapping AS (
-            SELECT 
-                rt.id as token_id,
-                (
-                    SELECT rtf.id
-                    FROM refresh_token_families rtf
-                    WHERE rtf.user_id = rt.user_id 
-                      AND rtf.tenant_id = rt.tenant_id
-                      AND NOT EXISTS (
-                          SELECT 1 FROM refresh_tokens rt2 
-                          WHERE rt2.family_id = rtf.id
-                      )
-                    LIMIT 1
-                ) as family_id
-            FROM refresh_tokens rt
-            WHERE rt.family_id IS NULL
-        )
-        UPDATE refresh_tokens rt
-        SET family_id = tfm.family_id
-        FROM token_family_mapping tfm
-        WHERE rt.id = tfm.token_id AND tfm.family_id IS NOT NULL;
-        
-        -- For any remaining tokens still without a family (edge case), create individual families
+        -- Create one family for each orphaned token
         INSERT INTO refresh_token_families (tenant_id, user_id, created_by_user_id, created_at, updated_at)
         SELECT rt.tenant_id, rt.user_id, rt.user_id, rt.issued_at, rt.issued_at
         FROM refresh_tokens rt
         WHERE rt.family_id IS NULL;
         
-        -- Final assignment pass for any stragglers
-        UPDATE refresh_tokens rt
-        SET family_id = (
-            SELECT rtf.id
+        -- Update each token to point to a newly created family
+        -- We use ROW_NUMBER to assign families in the order they were created
+        WITH numbered_tokens AS (
+            SELECT 
+                rt.id as token_id,
+                ROW_NUMBER() OVER (ORDER BY rt.issued_at) as token_num
+            FROM refresh_tokens rt
+            WHERE rt.family_id IS NULL
+        ),
+        numbered_families AS (
+            SELECT 
+                rtf.id as family_id,
+                ROW_NUMBER() OVER (ORDER BY rtf.created_at) as family_num
             FROM refresh_token_families rtf
-            WHERE rtf.user_id = rt.user_id 
-              AND rtf.tenant_id = rt.tenant_id
-              AND NOT EXISTS (
-                  SELECT 1 FROM refresh_tokens rt2 
-                  WHERE rt2.family_id = rtf.id
-              )
-            LIMIT 1
+            WHERE NOT EXISTS (
+                SELECT 1 FROM refresh_tokens rt2 
+                WHERE rt2.family_id = rtf.id
+            )
         )
-        WHERE rt.family_id IS NULL;
+        UPDATE refresh_tokens rt
+        SET family_id = nf.family_id
+        FROM numbered_tokens nt
+        JOIN numbered_families nf ON nt.token_num = nf.family_num
+        WHERE rt.id = nt.token_id;
     """)
 
 
