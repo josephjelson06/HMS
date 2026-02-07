@@ -6,6 +6,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.seed import seed_initial_data
 from app.middleware.auth import JwtPayloadMiddleware
 from app.middleware.csrf import CsrfMiddleware
+from app.modules.tenant.middleware import TenantContextMiddleware
 from app.modules.auth.router import router as auth_router
 from app.modules.admin.dashboard.router import router as admin_dashboard_router
 from app.modules.admin.hotels.router import router as admin_hotels_router
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TenantContextMiddleware)
     app.add_middleware(JwtPayloadMiddleware)
     app.add_middleware(CsrfMiddleware)
 

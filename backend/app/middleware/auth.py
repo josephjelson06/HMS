@@ -2,6 +2,7 @@
 from starlette.requests import Request
 
 from app.core.security import decode_access_token
+from app.modules.tenant.context import resolve_auth_context_from_claims
 
 
 def extract_token(request: Request) -> str | None:
@@ -16,4 +17,10 @@ class JwtPayloadMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         token = extract_token(request)
         request.state.token_payload = decode_access_token(token) if token else None
+        
+        # Resolve auth context from typed claims
+        request.state.auth_context = resolve_auth_context_from_claims(
+            getattr(request.state, "token_payload", None)
+        )
+        
         return await call_next(request)
