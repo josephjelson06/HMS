@@ -34,8 +34,17 @@ def has_permission(user_permissions: Iterable[str], required: str) -> bool:
 
 # --- New additions from AuthModule ---
 
+# Permission key validation pattern:
+# - Must start with a lowercase letter
+# - Subsequent segments can contain lowercase letters, numbers, and underscores
+# - Segments are separated by colons (:)
+# - Optional wildcard (*) allowed as the final segment
+# Valid: "hotel:rooms:create", "platform:users_admin:read", "hotel:*"
+# Invalid: "Hotel:Rooms" (uppercase), "123:abc" (starts with number), "" (empty)
 PERMISSION_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)*(?::\*)?$")
 
+# Fixed roles defined in the system for reference
+# These constants help ensure consistent role naming across the application
 FIXED_ROLES = (
     "platform_super_admin",
     "platform_admin",
