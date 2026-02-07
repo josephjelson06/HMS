@@ -19,6 +19,13 @@ from app.modules.auth.service import AuthService
 router = APIRouter()
 
 
+@router.get("/csrf", summary="Issue CSRF cookie for double-submit protection")
+async def csrf_cookie() -> dict[str, bool]:
+    """Returns a response that triggers the CSRF middleware to set a csrf_token cookie.
+    Call this endpoint before making your first mutating request if you don't have a CSRF cookie yet."""
+    return {"csrf_cookie_issued": True}
+
+
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, csrf_token: str) -> None:
     response.set_cookie(
         "access_token",
