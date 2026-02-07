@@ -79,7 +79,13 @@ async def refresh(
 ) -> AuthResponse:
     refresh_token = request.cookies.get("refresh_token")
     service = AuthService(session, request)
-    result = await service.refresh(refresh_token)
+    try:
+        result = await service.refresh(refresh_token)
+    except HTTPException as exc:
+        # If reuse is detected, clear cookies to force re-login
+        if "reuse detected" in str(exc.detail).lower():
+            clear_auth_cookies(response)
+        raise
     set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
     return result.response
 

@@ -16,6 +16,13 @@ from app.core.security import (
 from app.models.audit import AuditLog
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.modules.auth.refresh_tokens import (
+    issue_new_refresh_token_family,
+    rotate_refresh_token,
+    revoke_family_by_refresh_token,
+    RefreshTokenError,
+    RefreshTokenReuseDetectedError,
+)
 from app.modules.auth.schemas import AuthResponse, TenantOut, UserOut
 from app.repositories.impersonation import ImpersonationSessionRepository
 from app.repositories.permission import PermissionRepository
@@ -52,12 +59,22 @@ class AuthService:
         permissions = await self.perm_repo.get_permissions_for_user(user.id)
         tenant = await self._get_tenant_context(user)
 
+        # Issue new refresh token family for this login
+        family_result = await issue_new_refresh_token_family(
+            self.session,
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            refresh_token_days=settings.jwt_refresh_ttl_days,
+            created_by_user_id=user.id,
+        )
+
         result = await self._issue_auth_result(
             user=user,
             roles=roles,
             permissions=permissions,
             tenant=tenant,
             impersonation=None,
+            refresh_token_override=family_result.raw_token,
         )
         await self.session.commit()
         return result
@@ -66,55 +83,64 @@ class AuthService:
         if not refresh_token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
 
-        token_hash = hash_token(refresh_token)
-        stored = await self.token_repo.get_by_hash(token_hash)
+        try:
+            rotated = await rotate_refresh_token(
+                self.session,
+                raw_token=refresh_token,
+                refresh_token_days=settings.jwt_refresh_ttl_days,
+            )
+        except RefreshTokenReuseDetectedError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token reuse detected. All sessions revoked.",
+            )
+        except RefreshTokenError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=exc.detail,
+            )
 
-        if not stored or stored.revoked_at or stored.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-
-        user = await self.user_repo.get_by_id(UUID(str(stored.user_id)))
+        # Look up user to create new access token
+        user = await self.user_repo.get_by_id(rotated.user_id)
         if not user or not user.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
         roles = await self.perm_repo.get_role_names_for_user(user.id)
         permissions = await self.perm_repo.get_permissions_for_user(user.id)
         tenant = await self._get_tenant_context(user)
 
+        # Check for impersonation context (stored token still exists in DB for impersonation check)
         impersonation = None
-        if stored.impersonation_session_id and stored.impersonated_by_user_id:
+        token_hash = hash_token(refresh_token)
+        stored = await self.token_repo.get_by_hash(token_hash)
+        if stored and stored.impersonation_session_id and stored.impersonated_by_user_id:
             imp_session = await self.impersonation_repo.get_active_by_id(stored.impersonation_session_id)
-            if not imp_session or str(imp_session.target_user_id) != str(user.id):
-                await self.token_repo.revoke(stored)
-                await self.session.commit()
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Impersonation session ended")
-            imp_tenant = await self.session.get(Tenant, imp_session.target_tenant_id)
-            impersonation = self._build_impersonation_context(imp_session, imp_tenant)
-
-        new_refresh_token, new_refresh_jti = create_refresh_token()
-        await self.token_repo.revoke(stored, replaced_by_jti=new_refresh_jti)
+            if imp_session and str(imp_session.target_user_id) == str(user.id):
+                imp_tenant = await self.session.get(Tenant, imp_session.target_tenant_id)
+                impersonation = self._build_impersonation_context(imp_session, imp_tenant)
 
         result = await self._issue_auth_result(
             user=user,
             roles=roles,
             permissions=permissions,
             tenant=tenant,
-            refresh_token_override=new_refresh_token,
-            refresh_jti_override=new_refresh_jti,
+            refresh_token_override=rotated.raw_token,
             impersonation=impersonation,
-            impersonation_session_id=stored.impersonation_session_id,
-            impersonated_by_user_id=stored.impersonated_by_user_id,
         )
         await self.session.commit()
         return result
 
     async def logout(self, refresh_token: str | None) -> None:
-        if not refresh_token:
-            return
-        token_hash = hash_token(refresh_token)
-        stored = await self.token_repo.get_by_hash(token_hash)
-        if stored and not stored.revoked_at:
-            await self.token_repo.revoke(stored)
-            await self.session.commit()
+        if refresh_token:
+            try:
+                await revoke_family_by_refresh_token(
+                    self.session,
+                    raw_token=refresh_token,
+                    reason="logout",
+                )
+            except RefreshTokenError:
+                pass  # Token already invalid — still clear cookies
+        await self.session.commit()
 
     async def start_impersonation(
         self,
@@ -183,12 +209,22 @@ class AuthService:
         permissions = await self.perm_repo.get_permissions_for_user(target_user.id)
         impersonation = self._build_impersonation_context(imp_session, tenant)
 
+        # Issue new refresh token family for impersonation session
+        family_result = await issue_new_refresh_token_family(
+            self.session,
+            tenant_id=target_user.tenant_id,
+            user_id=target_user.id,
+            refresh_token_days=settings.jwt_refresh_ttl_days,
+            created_by_user_id=admin_user.id,
+        )
+
         result = await self._issue_auth_result(
             user=target_user,
             roles=roles,
             permissions=permissions,
             tenant=TenantOut.model_validate(tenant),
             impersonation=impersonation,
+            refresh_token_override=family_result.raw_token,
             impersonation_session_id=imp_session.id,
             impersonated_by_user_id=admin_user.id,
         )
@@ -232,10 +268,16 @@ class AuthService:
 
         await self.impersonation_repo.end(imp_session)
 
+        # Revoke the impersonation token family
         if current_refresh_token:
-            stored = await self.token_repo.get_by_hash(hash_token(current_refresh_token))
-            if stored and not stored.revoked_at:
-                await self.token_repo.revoke(stored)
+            try:
+                await revoke_family_by_refresh_token(
+                    self.session,
+                    raw_token=current_refresh_token,
+                    reason="impersonation_ended",
+                )
+            except RefreshTokenError:
+                pass  # Token already invalid
 
         self.session.add(
             AuditLog(
@@ -256,12 +298,22 @@ class AuthService:
         permissions = await self.perm_repo.get_permissions_for_user(admin_user.id)
         tenant = await self._get_tenant_context(admin_user)
 
+        # Issue new refresh token family for admin after stopping impersonation
+        family_result = await issue_new_refresh_token_family(
+            self.session,
+            tenant_id=admin_user.tenant_id,
+            user_id=admin_user.id,
+            refresh_token_days=settings.jwt_refresh_ttl_days,
+            created_by_user_id=admin_user.id,
+        )
+
         result = await self._issue_auth_result(
             user=admin_user,
             roles=roles,
             permissions=permissions,
             tenant=tenant,
             impersonation=None,
+            refresh_token_override=family_result.raw_token,
         )
 
         await self.session.commit()
@@ -299,22 +351,23 @@ class AuthService:
 
         access_token = create_access_token(token_payload)
 
+        # When using family system, refresh_token_override is provided
+        # and we skip the old token creation logic
         refresh_token = refresh_token_override
-        refresh_jti = refresh_jti_override
-        if refresh_token is None or refresh_jti is None:
+        if refresh_token is None:
+            # Fallback to old system (should not happen with new code)
             refresh_token, refresh_jti = create_refresh_token()
-
-        await self.token_repo.create(
-            user_id=user.id,
-            tenant_id=user.tenant_id,
-            jti=refresh_jti,
-            token_hash=hash_token(refresh_token),
-            expires_in_days=settings.jwt_refresh_ttl_days,
-            ip_address=self.request.client.host if self.request.client else None,
-            user_agent=self.request.headers.get("user-agent"),
-            impersonation_session_id=impersonation_session_id,
-            impersonated_by_user_id=impersonated_by_user_id,
-        )
+            await self.token_repo.create(
+                user_id=user.id,
+                tenant_id=user.tenant_id,
+                jti=refresh_jti,
+                token_hash=hash_token(refresh_token),
+                expires_in_days=settings.jwt_refresh_ttl_days,
+                ip_address=self.request.client.host if self.request.client else None,
+                user_agent=self.request.headers.get("user-agent"),
+                impersonation_session_id=impersonation_session_id,
+                impersonated_by_user_id=impersonated_by_user_id,
+            )
 
         csrf_token = generate_csrf_token()
         response = AuthResponse(
