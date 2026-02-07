@@ -20,6 +20,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def verify_password_constant_time(plain_password: str, hashed_password: str | None) -> bool:
+    """Verify password in constant time to prevent timing attacks.
+    
+    Returns False if hashed_password is None without short-circuiting.
+    """
+    if hashed_password is None:
+        # Still hash to maintain constant time
+        pwd_context.hash(plain_password)
+        return False
+    return pwd_context.verify(plain_password, hashed_password)
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
