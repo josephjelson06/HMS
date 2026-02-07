@@ -102,6 +102,8 @@ async def issue_new_refresh_token_family(
     refresh_token_days: int,
     created_by_user_id: UUID | None = None,
     parent_family_id: UUID | None = None,
+    impersonation_session_id: UUID | None = None,
+    impersonated_by_user_id: UUID | None = None,
 ) -> RefreshTokenIssueResult:
     """Create a new refresh token family and issue the first token in it.
     
@@ -130,6 +132,8 @@ async def issue_new_refresh_token_family(
         jti=str(uuid.uuid4()),  # Generate JTI for backward compatibility
         token_hash=token_hash,
         expires_at=expires_at,
+        impersonation_session_id=impersonation_session_id,
+        impersonated_by_user_id=impersonated_by_user_id,
     )
     session.add(token)
     await session.flush()
@@ -201,6 +205,9 @@ async def rotate_refresh_token(
         jti=str(uuid.uuid4()),  # Generate JTI for backward compatibility
         token_hash=new_token_hash,
         expires_at=new_expires_at,
+        # Preserve impersonation metadata from old token
+        impersonation_session_id=db_token.impersonation_session_id,
+        impersonated_by_user_id=db_token.impersonated_by_user_id,
     )
     session.add(new_token)
     await session.flush()

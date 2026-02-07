@@ -109,12 +109,12 @@ class AuthService:
         permissions = await self.perm_repo.get_permissions_for_user(user.id)
         tenant = await self._get_tenant_context(user)
 
-        # Check for impersonation context (stored token still exists in DB for impersonation check)
+        # Check for impersonation context by looking up the new token (impersonation metadata is preserved)
         impersonation = None
-        token_hash = hash_token(refresh_token)
-        stored = await self.token_repo.get_by_hash(token_hash)
-        if stored and stored.impersonation_session_id and stored.impersonated_by_user_id:
-            imp_session = await self.impersonation_repo.get_active_by_id(stored.impersonation_session_id)
+        new_token_hash = hash_token(rotated.raw_token)
+        new_stored = await self.token_repo.get_by_hash(new_token_hash)
+        if new_stored and new_stored.impersonation_session_id and new_stored.impersonated_by_user_id:
+            imp_session = await self.impersonation_repo.get_active_by_id(new_stored.impersonation_session_id)
             if imp_session and str(imp_session.target_user_id) == str(user.id):
                 imp_tenant = await self.session.get(Tenant, imp_session.target_tenant_id)
                 impersonation = self._build_impersonation_context(imp_session, imp_tenant)
@@ -216,6 +216,8 @@ class AuthService:
             user_id=target_user.id,
             refresh_token_days=settings.jwt_refresh_ttl_days,
             created_by_user_id=admin_user.id,
+            impersonation_session_id=imp_session.id,
+            impersonated_by_user_id=admin_user.id,
         )
 
         result = await self._issue_auth_result(
@@ -225,8 +227,6 @@ class AuthService:
             tenant=TenantOut.model_validate(tenant),
             impersonation=impersonation,
             refresh_token_override=family_result.raw_token,
-            impersonation_session_id=imp_session.id,
-            impersonated_by_user_id=admin_user.id,
         )
 
         await self.session.commit()
