@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -126,6 +127,7 @@ async def issue_new_refresh_token_family(
         tenant_id=tenant_id,
         user_id=user_id,
         family_id=family.id,
+        jti=str(uuid.uuid4()),  # Generate JTI for backward compatibility
         token_hash=token_hash,
         expires_at=expires_at,
     )
@@ -196,6 +198,7 @@ async def rotate_refresh_token(
         tenant_id=tenant_id,
         user_id=db_token.user_id,
         family_id=db_token.family_id,
+        jti=str(uuid.uuid4()),  # Generate JTI for backward compatibility
         token_hash=new_token_hash,
         expires_at=new_expires_at,
     )
