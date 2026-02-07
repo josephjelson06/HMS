@@ -75,7 +75,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             raise CSRFValidationError("CSRF token missing or invalid")
 
         if not hmac.compare_digest(cookie_token, header_token):
-            raise CSRFValidationError("CSRF token mismatch.")
+            raise CSRFValidationError("CSRF token mismatch")
 
     def _ensure_csrf_cookie(self, request: Request, response: Response) -> None:
         """Auto-issue a CSRF cookie if one doesn't already exist."""
