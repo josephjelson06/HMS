@@ -232,7 +232,7 @@ async def seed_initial_data(session: AsyncSession) -> None:
             password_hash=hash_password(settings.admin_seed_password),
             first_name="Admin",
             last_name="User",
-            user_type="admin",
+            user_type="platform",
             tenant_id=None,
             is_active=True,
         )

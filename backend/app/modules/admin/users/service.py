@@ -18,14 +18,14 @@ class AdminUserService:
         limit = max(min(limit, 100), 1)
 
         total = await self.session.scalar(
-            select(func.count()).select_from(User).where(User.user_type == "admin")
+            select(func.count()).select_from(User).where(User.user_type == "platform")
         )
 
         stmt = (
             select(User, Role.name)
             .join(UserRole, UserRole.user_id == User.id, isouter=True)
             .join(Role, Role.id == UserRole.role_id, isouter=True)
-            .where(User.user_type == "admin")
+            .where(User.user_type == "platform")
             .order_by(User.created_at.desc())
             .offset((page - 1) * limit)
             .limit(limit)
@@ -81,7 +81,7 @@ class AdminUserService:
             password_hash=hash_password(payload.password),
             first_name=payload.first_name,
             last_name=payload.last_name,
-            user_type="admin",
+            user_type="platform",
             tenant_id=None,
             is_active=payload.is_active,
         )
