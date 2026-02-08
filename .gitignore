@@ -44,6 +44,9 @@ playwright-report/
 test-results/
 .playwright/
 
+# Security scan outputs (may contain sensitive strings even when redacted)
+docs/security/reports/*.json
+
 # Database
 db.sqlite3
 db.sqlite3-journal

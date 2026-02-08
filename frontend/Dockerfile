@@ -7,4 +7,8 @@ RUN npm install
 
 COPY . .
 
+# Do not run the app as root.
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+USER app
+
 CMD ["npm", "run", "dev"]
