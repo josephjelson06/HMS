@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
@@ -11,6 +11,7 @@ interface AuthContextValue {
   permissions: string[];
   tenant: TenantContext | null;
   impersonation: ImpersonationContext | null;
+  mustResetPassword: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [tenant, setTenant] = useState<TenantContext | null>(null);
   const [impersonation, setImpersonation] = useState<ImpersonationContext | null>(null);
+  const [mustResetPassword, setMustResetPassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const applyAuth = useCallback((payload: AuthResponse) => {
@@ -33,6 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPermissions(payload.permissions);
     setTenant(payload.tenant ?? null);
     setImpersonation(payload.impersonation ?? null);
+    setMustResetPassword(Boolean(payload.must_reset_password));
+  }, []);
+
+  const clearAuth = useCallback(() => {
+    setUser(null);
+    setPermissions([]);
+    setTenant(null);
+    setImpersonation(null);
+    setMustResetPassword(false);
   }, []);
 
   const bootstrap = useCallback(async () => {
@@ -44,18 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const refreshed = await authApi.refresh();
         applyAuth(refreshed);
       } catch {
-        setUser(null);
-        setPermissions([]);
-        setTenant(null);
-        setImpersonation(null);
+        clearAuth();
       }
     } finally {
       setLoading(false);
     }
-  }, [applyAuth]);
+  }, [applyAuth, clearAuth]);
 
   useEffect(() => {
-    bootstrap();
+    void bootstrap();
   }, [bootstrap]);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -66,11 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await authApi.logout();
-    setUser(null);
-    setPermissions([]);
-    setTenant(null);
-    setImpersonation(null);
-  }, []);
+    clearAuth();
+  }, [clearAuth]);
 
   const refresh = useCallback(async () => {
     const response = await authApi.refresh();
@@ -95,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       tenant,
       impersonation,
+      mustResetPassword,
       loading,
       login,
       logout,
@@ -107,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       tenant,
       impersonation,
+      mustResetPassword,
       loading,
       login,
       logout,

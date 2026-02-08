@@ -13,18 +13,14 @@ import { Button } from "@/components/ui/primitives/button";
 import { Field } from "@/components/ui/primitives/field";
 import { TextInput } from "@/components/ui/primitives/text-input";
 import { hotelProfileApi } from "@/lib/api/hotel/profile";
-import { useAuth } from "@/lib/hooks/use-auth";
 import type { Profile } from "@/lib/types/profile";
 
 const defaultForm = {
   first_name: "",
-  last_name: "",
-  current_password: "",
-  new_password: ""
+  last_name: ""
 };
 
 export default function HotelProfilePage() {
-  const { refresh } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [form, setForm] = useState(defaultForm);
   const [loading, setLoading] = useState(true);
@@ -39,9 +35,7 @@ export default function HotelProfilePage() {
       setProfile(data);
       setForm({
         first_name: data.first_name ?? "",
-        last_name: data.last_name ?? "",
-        current_password: "",
-        new_password: ""
+        last_name: data.last_name ?? ""
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load profile");
@@ -65,13 +59,9 @@ export default function HotelProfilePage() {
     try {
       await hotelProfileApi.update({
         first_name: form.first_name || undefined,
-        last_name: form.last_name || undefined,
-        current_password: form.current_password || undefined,
-        new_password: form.new_password || undefined
+        last_name: form.last_name || undefined
       });
-      await refresh();
       setSuccess("Profile updated successfully.");
-      setForm((prev) => ({ ...prev, current_password: "", new_password: "" }));
       await loadProfile();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update profile");
@@ -91,7 +81,7 @@ export default function HotelProfilePage() {
       }
     >
       <div className="space-y-6">
-        <PageHeader title="My Profile" description="Manage your account details and password." />
+        <PageHeader title="My Profile" description="Manage your account details." />
 
         {loading ? (
           <InlineAlert tone="info" message="Loading profile..." />
@@ -126,22 +116,6 @@ export default function HotelProfilePage() {
                       value={form.last_name}
                       onChange={(event) => handleChange("last_name", event.target.value)}
                       placeholder="Last name"
-                    />
-                  </Field>
-                  <Field label="Current Password">
-                    <TextInput
-                      type="password"
-                      value={form.current_password}
-                      onChange={(event) => handleChange("current_password", event.target.value)}
-                      placeholder="********"
-                    />
-                  </Field>
-                  <Field label="New Password">
-                    <TextInput
-                      type="password"
-                      value={form.new_password}
-                      onChange={(event) => handleChange("new_password", event.target.value)}
-                      placeholder="********"
                     />
                   </Field>
                   <div className="md:col-span-2">
