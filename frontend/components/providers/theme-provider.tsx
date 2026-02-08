@@ -15,6 +15,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem("hms-theme") : null;
     if (stored === "light" || stored === "dark") {
+      // Hydrate client-only preference after mount to avoid SSR hydration mismatches.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(stored);
       document.documentElement.setAttribute("data-theme", stored);
     } else {

@@ -1,8 +1,8 @@
 # HMS AuthModule Integration Context
 
 ## Current Snapshot
-- Timestamp: 2026-02-09T00:06:00+05:30
-- Current branch: `master`
+- Timestamp: 2026-02-09T01:24:08+05:30
+- Current branch: `hardening/phase-4-6-next16`
 - Current commit: run `git rev-parse HEAD`
 - Note: git history was rewritten to purge leaked artifacts. Any commit SHAs captured before the rewrite are no longer valid.
 
@@ -95,6 +95,9 @@
 - Command: `cd frontend && npm run test:e2e`
 - Result: `2 passed` (Chromium)
 
+- Command: `cd frontend && npm audit --omit=dev`
+- Result: `found 0 vulnerabilities`
+
 ## Hardening Phase Status (Auth + Security)
 - Phase 1 (migrations): completed
 - Phase 2 (automated regression gates): completed
@@ -105,12 +108,12 @@
 - Phase 4.3 (secrets rotation runbook): completed (`docs/runbooks/secrets.md`, updated `.env.example` guidance)
 - Phase 4.4 (DAST baseline): completed (OWASP ZAP baseline; summary in `docs/security/zap_baseline.md`)
 - Phase 4.5 (auth-negative regression automation): completed (`backend/tests/system/test_auth_negative_regressions.py`)
-- Phase 4.6 (Next.js upgrade to address npm audit HIGH): pending
+- Phase 4.6 (Next.js upgrade to address npm audit HIGH): completed (upgraded to Next 16.x; `npm audit --omit=dev` clean)
 - Phase 5 (performance + reliability): pending
 - Phase 6 (release readiness): pending
 
 ## Known Risks / Follow-ups
-1. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
+1. Ensure CI uses a Node version compatible with Next 16 (Next 16.1.6 requires Node `>=20.9.0`).
 2. System auth-negative regression tests require a running backend (set `SMOKE_BASE_URL`). Prefer running them against a disposable DB for repeatability.
 3. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
 

@@ -21,6 +21,8 @@ export function AppFrame({ variant, children }: AppFrameProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = localStorage.getItem("hms-sidebar-collapsed");
+    // Hydrate client-only preference after mount to avoid SSR hydration mismatches.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed(saved === "1");
   }, []);
 

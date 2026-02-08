@@ -4,7 +4,7 @@ const BACKEND_BASE = process.env.PW_BACKEND_BASE_URL ?? "http://127.0.0.1:8000/a
 const FRONTEND_ORIGIN =
   process.env.PW_FRONTEND_ORIGIN ??
   process.env.PLAYWRIGHT_BASE_URL ??
-  "http://localhost:3100";
+  "http://localhost:3000";
 
 async function getCookieValue(request: APIRequestContext, name: string): Promise<string | undefined> {
   const state = await request.storageState();
@@ -101,7 +101,7 @@ test("must-reset-password flow forces change-password then allows hotel workspac
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(/\/change-password$/);
-    await expect(page.getByText("Reset your password")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
 
     // Guard should prevent accessing hotel pages while must-reset is active.
     await page.goto("/hotel/dashboard");
