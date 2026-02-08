@@ -10,16 +10,19 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     generate_csrf_token,
+    hash_password,
     hash_token,
     verify_password_constant_time,
 )
 from app.models.audit import AuditLog
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.modules.auth.passwords import validate_password_strength, generate_temporary_password, PasswordValidationError
 from app.modules.auth.refresh_tokens import (
     issue_new_refresh_token_family,
     rotate_refresh_token,
     revoke_family_by_refresh_token,
+    revoke_all_refresh_token_families,
     RefreshTokenError,
     RefreshTokenReuseDetectedError,
 )
@@ -434,6 +437,7 @@ class AuthService:
             permissions=permissions,
             tenant=tenant,
             impersonation=impersonation,
+            must_reset_password=getattr(user, 'must_reset_password', False),
         )
         return AuthResult(
             response=response,
@@ -453,3 +457,89 @@ class AuthService:
             "admin_user_id": str(session.actor_user_id),
             "target_user_id": str(session.acting_as_user_id),
         }
+
+    async def change_password(self, user_id: UUID, current_password: str, new_password: str) -> None:
+        """User changes their own password. Revokes all sessions."""
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+        # Verify current password
+        if not verify_password_constant_time(current_password, user.password_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+        
+        # Validate new password strength
+        try:
+            validate_password_strength(new_password)
+        except PasswordValidationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        
+        # Hash and update
+        user.password_hash = hash_password(new_password)
+        user.must_reset_password = False
+        
+        # Revoke ALL refresh token families for this user
+        await revoke_all_refresh_token_families(
+            self.session,
+            user_id=user.id,
+            reason="password_changed",
+        )
+        
+        await self.session.commit()
+
+    async def reset_password(self, target_user_id: UUID, admin_user_id: UUID) -> str:
+        """Admin resets a user's password. Returns temporary password. Revokes all sessions."""
+        user = await self.user_repo.get_by_id(target_user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+        # Generate temporary password
+        temp_password = generate_temporary_password()
+        user.password_hash = hash_password(temp_password)
+        user.must_reset_password = True
+        
+        # Revoke ALL refresh token families for the target user
+        await revoke_all_refresh_token_families(
+            self.session,
+            user_id=user.id,
+            reason="password_reset_by_admin",
+        )
+        
+        await self.session.commit()
+        return temp_password
+
+    async def invite_user(
+        self,
+        email: str,
+        username: str,
+        user_type: str,
+        tenant_id: UUID,
+    ) -> tuple:
+        """Create a new user with a temporary password. Returns (user, temporary_password)."""
+        from app.models.user import User
+        
+        # Check if user already exists in this tenant
+        existing = await self.user_repo.get_by_email(email)
+        if existing and existing.tenant_id == tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists in this tenant.",
+            )
+        
+        # Generate temporary password
+        temp_password = generate_temporary_password()
+        
+        user = User(
+            email=email,
+            username=username,
+            user_type=user_type,
+            tenant_id=tenant_id,
+            password_hash=hash_password(temp_password),
+            must_reset_password=True,
+            is_active=True,
+        )
+        self.session.add(user)
+        await self.session.flush()
+        
+        await self.session.commit()
+        return user, temp_password
