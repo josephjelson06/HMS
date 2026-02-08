@@ -139,6 +139,9 @@ class AuthService:
                 refresh_token_days=settings.jwt_refresh_ttl_days,
             )
         except RefreshTokenReuseDetectedError:
+            # rotate_refresh_token() revokes the family inside the current transaction.
+            # Ensure that revocation is persisted even though we return 401.
+            await self.session.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token reuse detected. All sessions revoked.",
