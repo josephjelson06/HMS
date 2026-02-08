@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,11 @@ export default function LoginForm() {
     setSubmitting(true);
     try {
       const response = await login(email, password);
+      if (response.must_reset_password) {
+        router.push("/change-password");
+        return;
+      }
+
       const isPlatformUser =
         response.user.user_type === "platform" || response.user.user_type === "admin";
       const target = isPlatformUser ? "/admin/dashboard" : "/hotel/dashboard";

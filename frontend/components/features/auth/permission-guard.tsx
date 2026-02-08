@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import { AccessDeniedState } from "@/components/ui/composed/access-denied-state";
 import { useAuth } from "@/lib/hooks/use-auth";
@@ -35,9 +36,18 @@ export function UserTypeGuard({
   children: ReactNode;
   fallback?: ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const router = useRouter();
+  const { user, loading, mustResetPassword } = useAuth();
+
+  useEffect(() => {
+    if (!loading && user && mustResetPassword) {
+      router.replace("/change-password");
+    }
+  }, [loading, mustResetPassword, router, user]);
 
   if (loading) return null;
+  if (user && mustResetPassword) return null;
+
   const matchesUserType = (actual: UserType, expected: UserType): boolean => {
     if (expected === "platform") return actual === "platform" || actual === "admin";
     if (expected === "admin") return actual === "admin" || actual === "platform";
