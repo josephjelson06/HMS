@@ -22,6 +22,7 @@ from app.modules.auth.refresh_tokens import (
     issue_new_refresh_token_family,
     rotate_refresh_token,
     revoke_family_by_refresh_token,
+    revoke_refresh_token_family,
     revoke_all_refresh_token_families,
     RefreshTokenError,
     RefreshTokenReuseDetectedError,
@@ -157,11 +158,9 @@ class AuthService:
         tenant = await self._get_tenant_context(user)
 
         impersonation = None
-        new_token_hash = hash_token(rotated.raw_token)
-        new_stored = await self.token_repo.get_by_hash(new_token_hash)
-        if new_stored and new_stored.impersonation_session_id and new_stored.impersonated_by_user_id:
-            imp_session = await self.impersonation_repo.get_active_by_id(new_stored.impersonation_session_id)
-            if not imp_session or str(imp_session.acting_as_user_id) != str(user.id):
+        imp_session = await self.impersonation_repo.find_active_impersonation_for_refresh_family(rotated.family_id)
+        if imp_session:
+            if str(imp_session.acting_as_user_id) != str(user.id):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Impersonation session ended")
             imp_tenant = await self.session.get(Tenant, imp_session.tenant_id)
             impersonation = self._build_impersonation_context(imp_session, imp_tenant)
@@ -201,6 +200,7 @@ class AuthService:
         tenant_id: UUID | None,
         target_user_id: UUID | None,
         reason: str | None,
+        actor_refresh_token: str | None = None,
     ) -> AuthResult:
         admin_user = await self.user_repo.get_by_id(admin_user_id)
         if not admin_user or not admin_user.is_active or admin_user.user_type != "platform":
@@ -261,6 +261,12 @@ class AuthService:
         permissions = await self.perm_repo.get_permissions_for_user(target_user.id)
         impersonation = self._build_impersonation_context(imp_session, tenant)
 
+        actor_family_id = None
+        if actor_refresh_token:
+            actor_stored = await self.token_repo.get_by_hash(hash_token(actor_refresh_token))
+            if actor_stored and str(actor_stored.user_id) == str(admin_user.id):
+                actor_family_id = actor_stored.family_id
+
         # Issue new refresh token family for impersonation session
         family_result = await issue_new_refresh_token_family(
             self.session,
@@ -268,9 +274,11 @@ class AuthService:
             user_id=target_user.id,
             refresh_token_days=settings.jwt_refresh_ttl_days,
             created_by_user_id=admin_user.id,
+            parent_family_id=actor_family_id,
             impersonation_session_id=imp_session.id,
             impersonated_by_user_id=admin_user.id,
         )
+        await self.impersonation_repo.set_refresh_token_family_id(imp_session, family_result.family_id)
 
         result = await self._issue_auth_result(
             user=target_user,
@@ -295,13 +303,13 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active impersonation")
 
         session_id = impersonation.get("session_id")
-        admin_user_id = impersonation.get("admin_user_id")
-        if not session_id or not admin_user_id:
+        actor_user_id = impersonation.get("actor_user_id") or impersonation.get("admin_user_id")
+        if not session_id or not actor_user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Impersonation context invalid")
 
         try:
             session_uuid = UUID(str(session_id))
-            admin_uuid = UUID(str(admin_user_id))
+            admin_uuid = UUID(str(actor_user_id))
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Impersonation context invalid") from exc
 
@@ -320,8 +328,14 @@ class AuthService:
 
         await self.impersonation_repo.end(imp_session)
 
-        # Revoke the impersonation token family
-        if current_refresh_token:
+        # Revoke impersonation token family by linked session family id when available.
+        if imp_session.refresh_token_family_id:
+            await revoke_refresh_token_family(
+                self.session,
+                family_id=imp_session.refresh_token_family_id,
+                reason="impersonation_ended",
+            )
+        elif current_refresh_token:
             try:
                 await revoke_family_by_refresh_token(
                     self.session,
@@ -454,6 +468,9 @@ class AuthService:
             "tenant_name": tenant.name if tenant else "Unknown Tenant",
             "session_id": str(session.id),
             "started_at": session.started_at.isoformat() if session.started_at else datetime.now(timezone.utc).isoformat(),
+            "actor_user_id": str(session.actor_user_id),
+            "acting_as_user_id": str(session.acting_as_user_id),
+            # Backward-compatible aliases retained temporarily for existing HMS consumers.
             "admin_user_id": str(session.actor_user_id),
             "target_user_id": str(session.acting_as_user_id),
         }
