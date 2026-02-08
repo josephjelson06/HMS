@@ -114,6 +114,7 @@ async def start_impersonation(
         tenant_id=payload.tenant_id,
         target_user_id=payload.target_user_id,
         reason=payload.reason,
+        actor_refresh_token=request.cookies.get("refresh_token"),
     )
     set_access_token_cookie(response, token=result.access_token)
     set_refresh_token_cookie(response, token=result.refresh_token)

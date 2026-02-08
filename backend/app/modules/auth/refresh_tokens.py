@@ -248,6 +248,16 @@ async def revoke_family_by_refresh_token(
     return family_id, count
 
 
+async def revoke_refresh_token_family(
+    session: AsyncSession,
+    *,
+    family_id: UUID,
+    reason: str,
+) -> int:
+    """Revoke a refresh token family directly by family_id."""
+    return await _revoke_family(session, family_id=family_id, reason=reason)
+
+
 async def revoke_all_refresh_token_families(
     session: AsyncSession,
     *,

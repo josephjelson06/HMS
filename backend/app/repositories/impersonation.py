@@ -51,6 +51,26 @@ class ImpersonationSessionRepository:
         )
         return await self.session.scalar(stmt)
 
+    async def find_active_impersonation_for_refresh_family(
+        self, refresh_token_family_id: UUID
+    ) -> ImpersonationSession | None:
+        stmt = (
+            select(ImpersonationSession)
+            .where(
+                ImpersonationSession.refresh_token_family_id == refresh_token_family_id,
+                ImpersonationSession.ended_at.is_(None),
+            )
+            .order_by(ImpersonationSession.started_at.desc())
+            .limit(1)
+        )
+        return await self.session.scalar(stmt)
+
+    async def set_refresh_token_family_id(
+        self, session: ImpersonationSession, refresh_token_family_id: UUID
+    ) -> None:
+        session.refresh_token_family_id = refresh_token_family_id
+        self.session.add(session)
+
     async def end(self, session: ImpersonationSession) -> None:
         session.ended_at = datetime.now(timezone.utc)
         self.session.add(session)

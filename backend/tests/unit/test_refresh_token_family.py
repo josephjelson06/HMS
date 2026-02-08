@@ -12,6 +12,7 @@ from app.modules.auth.refresh_tokens import (
     issue_new_refresh_token_family,
     rotate_refresh_token,
     revoke_family_by_refresh_token,
+    revoke_refresh_token_family,
     revoke_all_refresh_token_families,
 )
 
@@ -189,3 +190,30 @@ def test_exception_hierarchy():
     exc2 = RefreshTokenError("Test error", status_code=400)
     assert exc2.status_code == 400
     assert exc2.detail == "Test error"
+
+
+@pytest.mark.asyncio
+async def test_revoke_refresh_token_family_delegates_to_internal(monkeypatch):
+    """Test explicit family revoke helper delegates to internal family revocation."""
+    captured = {}
+
+    async def fake_revoke_family(session, *, family_id, reason):
+        captured["session"] = session
+        captured["family_id"] = family_id
+        captured["reason"] = reason
+        return 7
+
+    monkeypatch.setattr("app.modules.auth.refresh_tokens._revoke_family", fake_revoke_family)
+
+    session = object()
+    family_id = uuid4()
+    revoked_count = await revoke_refresh_token_family(
+        session,
+        family_id=family_id,
+        reason="impersonation_ended",
+    )
+
+    assert revoked_count == 7
+    assert captured["session"] is session
+    assert captured["family_id"] == family_id
+    assert captured["reason"] == "impersonation_ended"
