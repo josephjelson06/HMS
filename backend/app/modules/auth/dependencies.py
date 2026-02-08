@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import has_permission
+from app.core.permissions import build_scoped_permission, has_permission
 from app.core.database import get_session
 from app.modules.auth.tokens import AccessTokenClaims, AccessTokenError, decode_access_token as decode_token_strict
 from app.repositories.permission import PermissionRepository
@@ -75,6 +75,55 @@ def require_permission(permission_code: str):
         return current_user
 
     return checker
+
+
+def require_tenant_permission(resource: str, action: str):
+    """FastAPI dependency factory that checks permissions auto-scoped to the caller's tenant type.
+    
+    Usage:
+        @router.post("/rooms")
+        async def create_room(
+            _: str = Depends(require_tenant_permission("rooms", "create")),
+            current_user: CurrentUser = Depends(get_current_user),
+        ):
+            ...
+    
+    This automatically resolves to "hotel:rooms:create" or "platform:rooms:create"
+    based on the current user's user_type/tenant_type.
+    
+    Existing routes using Depends(require_permission("admin:hotels:read")) continue to work.
+    New routes should prefer this auto-scoping version.
+    """
+    async def _check_permission(
+        current_user = Depends(get_current_user),
+    ) -> str:
+        # Determine the tenant type from the user's user_type
+        # After PR 5, user_type is "platform" or "hotel"
+        tenant_type = current_user.user_type
+        required = build_scoped_permission(tenant_type, resource, action)
+        
+        if not has_permission(current_user.permissions, required):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: {required}",
+            )
+        return required
+    
+    return _check_permission
+
+
+async def get_effective_permissions(request: Request, current_user = Depends(get_current_user)) -> frozenset[str]:
+    """Get the effective permissions for the current user, cached per-request.
+    
+    Returns a frozenset of permission strings resolved from the user's roles.
+    """
+    cached = getattr(request.state, "_effective_permissions", None)
+    if cached is not None:
+        return cached
+    
+    permissions = frozenset(current_user.permissions)
+    request.state._effective_permissions = permissions
+    return permissions
 
 
 async def require_access_token_claims(request: Request) -> AccessTokenClaims:
