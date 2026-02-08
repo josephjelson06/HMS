@@ -53,6 +53,8 @@ def verify_password_constant_time(password: str, password_hash: str | None) -> b
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    # DEPRECATED: Use app.modules.auth.tokens.create_access_token / decode_access_token instead.
+    # Kept temporarily for backward compatibility during migration.
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
     expire = now + (expires_delta or timedelta(minutes=settings.jwt_access_ttl_minutes))
@@ -61,6 +63,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def decode_access_token(token: str) -> dict | None:
+    # DEPRECATED: Use app.modules.auth.tokens.create_access_token / decode_access_token instead.
+    # Kept temporarily for backward compatibility during migration.
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except InvalidTokenError:
