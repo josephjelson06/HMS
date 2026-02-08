@@ -171,7 +171,7 @@ class AuthService:
                 action="impersonation.started",
                 resource_type="impersonation_session",
                 resource_id=imp_session.id,
-                metadata={
+                metadata_json={
                     "target_user_id": str(target_user.id),
                     "target_user_email": target_user.email,
                     "target_tenant_id": str(target_user.tenant_id),
@@ -247,7 +247,7 @@ class AuthService:
                 action="impersonation.ended",
                 resource_type="impersonation_session",
                 resource_id=imp_session.id,
-                metadata={
+                metadata_json={
                     "target_user_id": str(imp_session.acting_as_user_id),
                 },
                 ip_address=self.request.client.host if self.request.client else None,
