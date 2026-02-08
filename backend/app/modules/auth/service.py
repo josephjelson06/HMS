@@ -11,7 +11,7 @@ from app.core.security import (
     create_refresh_token,
     generate_csrf_token,
     hash_token,
-    verify_password,
+    verify_password_constant_time,
 )
 from app.models.audit import AuditLog
 from app.models.tenant import Tenant
@@ -42,7 +42,10 @@ class AuthService:
 
     async def login(self, email: str, password: str) -> AuthResult:
         user = await self.user_repo.get_by_email(email)
-        if not user or not verify_password(password, user.password_hash):
+        password_hash = user.password_hash if user is not None else None
+        authenticated = verify_password_constant_time(password, password_hash)
+
+        if not authenticated or user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         if not user.is_active:
