@@ -104,14 +104,14 @@
 - Phase 4.2 (rewrite git history; purge leaks): completed (gitleaks git/history clean; remote branches pointing to old history deleted)
 - Phase 4.3 (secrets rotation runbook): completed (`docs/runbooks/secrets.md`, updated `.env.example` guidance)
 - Phase 4.4 (DAST baseline): completed (OWASP ZAP baseline; summary in `docs/security/zap_baseline.md`)
-- Phase 4.5 (auth-negative regression automation): pending
+- Phase 4.5 (auth-negative regression automation): completed (`backend/tests/system/test_auth_negative_regressions.py`)
 - Phase 4.6 (Next.js upgrade to address npm audit HIGH): pending
 - Phase 5 (performance + reliability): pending
 - Phase 6 (release readiness): pending
 
 ## Known Risks / Follow-ups
 1. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
-2. Auth-negative regression tests are still pending.
+2. System auth-negative regression tests require a running backend (set `SMOKE_BASE_URL`). Prefer running them against a disposable DB for repeatability.
 3. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
 
 ## Next-Session Start Instructions
@@ -127,6 +127,6 @@
 3. Re-run live API smoke gate against a disposable DB:
    - `python backend/scripts/smoke_api.py --base-url http://127.0.0.1:8000/api`
 4. Continue security phase:
-   - run OWASP ZAP baseline
-   - add auth-negative regression tests
+   - re-run OWASP ZAP baseline as needed (see `docs/security/zap_baseline.md`)
+   - run auth-negative system gate: `cd backend && SMOKE_BASE_URL=http://127.0.0.1:8000/api python -m pytest -q -m system`
    - upgrade Next to remove HIGH audit findings
