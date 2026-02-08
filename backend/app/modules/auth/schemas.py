@@ -46,7 +46,67 @@ class AuthResponse(BaseModel):
     permissions: list[str]
     tenant: TenantOut | None = None
     impersonation: dict[str, Any] | None = None
+    must_reset_password: bool = False
 
 
 class LogoutResponse(BaseModel):
     success: bool = True
+
+
+# --- Password Management Schemas ---
+
+class PasswordChangeRequest(BaseModel):
+    """Request to change the current user's own password."""
+    current_password: str
+    new_password: str
+
+class PasswordChangeResponse(BaseModel):
+    """Response after successful password change."""
+    message: str = "Password changed successfully. All sessions have been revoked."
+
+class PasswordResetRequest(BaseModel):
+    """Admin request to reset another user's password."""
+    user_id: UUID
+    
+class PasswordResetResponse(BaseModel):
+    """Response after admin password reset."""
+    temporary_password: str
+    message: str = "Password has been reset. User must change password on next login."
+
+class InviteUserRequest(BaseModel):
+    """Request to invite a new user."""
+    email: str
+    username: str
+    user_type: str  # "platform" or "hotel"
+    tenant_id: UUID
+    role_names: list[str] = []
+
+class InviteUserResponse(BaseModel):
+    """Response after user invitation."""
+    user_id: UUID
+    email: str
+    username: str
+    temporary_password: str
+    must_reset_password: bool = True
+    message: str = "User invited successfully."
+
+class IdentityCheckRequest(BaseModel):
+    """Request to verify credentials without issuing tokens."""
+    email: str
+    password: str
+    tenant_id: UUID | None = None
+
+class IdentityCheckResponse(BaseModel):
+    """Response for identity verification."""
+    verified: bool
+    user_id: UUID | None = None
+    user_type: str | None = None
+
+class AccessTokenVerifyResponse(BaseModel):
+    """Response for access token introspection."""
+    valid: bool
+    user_id: UUID | None = None
+    user_type: str | None = None
+    tenant_id: UUID | None = None
+    roles: list[str] = []
+    expires_at: str | None = None

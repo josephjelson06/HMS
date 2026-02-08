@@ -5,14 +5,25 @@ from app.core.database import get_session
 from app.models.tenant import Tenant
 from app.modules.auth.dependencies import CurrentUser, get_current_user, require_permission
 from app.modules.auth.schemas import (
+    AccessTokenVerifyResponse,
     AuthResponse,
+    IdentityCheckRequest,
+    IdentityCheckResponse,
     ImpersonationStartRequest,
+    InviteUserRequest,
+    InviteUserResponse,
     LoginRequest,
     LogoutResponse,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
+    PasswordResetRequest,
+    PasswordResetResponse,
     TenantOut,
     UserOut,
 )
 from app.modules.auth.service import AuthService
+from app.modules.audit.hooks import audit_event_stub
+from app.repositories.user import UserRepository
 from app.modules.auth.tokens import (
     set_access_token_cookie,
     set_refresh_token_cookie,
@@ -154,3 +165,156 @@ async def me(
         tenant=tenant,
         impersonation=current_user.impersonation,
     )
+
+
+@router.post("/password/change", response_model=PasswordChangeResponse)
+async def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    current_user = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Change the current user's password. Revokes all active sessions."""
+    service = AuthService(session, request)
+    await service.change_password(
+        user_id=current_user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+    
+    await audit_event_stub(
+        action="password.changed",
+        session=session,
+        metadata={"user_id": str(current_user.id)},
+    )
+    
+    return PasswordChangeResponse()
+
+
+@router.post("/password/reset", response_model=PasswordResetResponse)
+async def reset_password(
+    payload: PasswordResetRequest,
+    request: Request,
+    current_user = Depends(get_current_user),
+    _: str = Depends(require_permission("admin:users:manage")),
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin resets another user's password. Returns a temporary password."""
+    service = AuthService(session, request)
+    temp_password = await service.reset_password(
+        target_user_id=payload.user_id,
+        admin_user_id=current_user.id,
+    )
+    
+    await audit_event_stub(
+        action="password.reset",
+        session=session,
+        metadata={
+            "target_user_id": str(payload.user_id),
+            "reset_by": str(current_user.id),
+        },
+    )
+    
+    return PasswordResetResponse(temporary_password=temp_password)
+
+
+@router.post("/users/invite", response_model=InviteUserResponse)
+async def invite_user(
+    payload: InviteUserRequest,
+    request: Request,
+    current_user = Depends(get_current_user),
+    _: str = Depends(require_permission("admin:users:create")),
+    session: AsyncSession = Depends(get_session),
+):
+    """Invite a new user with a temporary password."""
+    service = AuthService(session, request)
+    user, temp_password = await service.invite_user(
+        email=payload.email,
+        username=payload.username,
+        user_type=payload.user_type,
+        tenant_id=payload.tenant_id,
+    )
+    
+    await audit_event_stub(
+        action="user.invited",
+        session=session,
+        metadata={
+            "invited_user_id": str(user.id),
+            "email": payload.email,
+            "user_type": payload.user_type,
+            "invited_by": str(current_user.id),
+        },
+    )
+    
+    return InviteUserResponse(
+        user_id=user.id,
+        email=user.email,
+        username=user.username,
+        temporary_password=temp_password,
+    )
+
+
+@router.post("/identity/check", response_model=IdentityCheckResponse)
+async def identity_check(
+    payload: IdentityCheckRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Verify credentials without issuing tokens.
+    
+    Useful for confirming identity before sensitive operations.
+    """
+    from app.core.security import verify_password_constant_time
+    
+    # Look up user
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_email(payload.email)
+    
+    password_hash = user.password_hash if user else None
+    verified = verify_password_constant_time(payload.password, password_hash)
+    
+    if verified and user and user.is_active:
+        return IdentityCheckResponse(
+            verified=True,
+            user_id=user.id,
+            user_type=user.user_type,
+        )
+    
+    return IdentityCheckResponse(verified=False)
+
+
+@router.get("/access-token/verify", response_model=AccessTokenVerifyResponse)
+async def verify_access_token(
+    request: Request,
+):
+    """Introspect the current access token and return its claims.
+    
+    Returns valid=false if no token or token is invalid/expired.
+    """
+    from app.core.security import decode_access_token
+    
+    token = request.cookies.get("access_token")
+    if not token:
+        return AccessTokenVerifyResponse(valid=False)
+    
+    try:
+        claims = decode_access_token(token)
+        if not claims:
+            return AccessTokenVerifyResponse(valid=False)
+        
+        # Extract claims
+        from uuid import UUID
+        from datetime import datetime
+        
+        user_id = UUID(claims.get("sub")) if claims.get("sub") else None
+        expires_at = datetime.fromtimestamp(claims.get("exp")) if claims.get("exp") else None
+        
+        return AccessTokenVerifyResponse(
+            valid=True,
+            user_id=user_id,
+            user_type=claims.get("user_type"),
+            tenant_id=UUID(claims.get("tenant_id")) if claims.get("tenant_id") else None,
+            roles=claims.get("roles", []),
+            expires_at=expires_at.isoformat() if expires_at else None,
+        )
+    except Exception:
+        return AccessTokenVerifyResponse(valid=False)
