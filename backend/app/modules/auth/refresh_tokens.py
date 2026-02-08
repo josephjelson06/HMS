@@ -28,7 +28,7 @@ from app.models.token import RefreshToken, RefreshTokenFamily
 
 
 REFRESH_TOKEN_BYTES = 32
-REFRESH_TOKEN_VERSION = "rt1"
+REFRESH_TOKEN_VERSION = "rt1"  # nosec B105
 
 
 class RefreshTokenError(Exception):

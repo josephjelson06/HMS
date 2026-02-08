@@ -126,3 +126,28 @@ class TestTenantContextMiddleware:
         assert request.state.auth_context.tenant_id is None
         assert request.state.auth_context.tenant_type == TenantType.PLATFORM
         assert call_next.called
+
+    @pytest.mark.anyio
+    async def test_middleware_with_legacy_admin_user_type_maps_to_platform(self):
+        """Legacy user_type='admin' should map to TenantType.PLATFORM during transition."""
+        middleware = TenantContextMiddleware(app=Mock())
+
+        user_id = uuid4()
+
+        request = Mock()
+        request.state.token_payload = {
+            "sub": str(user_id),
+            "tenant_id": None,
+            "user_type": "admin",  # legacy value
+            "roles": ["super_admin"],
+        }
+
+        call_next = AsyncMock(return_value=Mock())
+
+        await middleware.dispatch(request, call_next)
+
+        assert request.state.auth_context is not None
+        assert request.state.auth_context.user_id == user_id
+        assert request.state.auth_context.tenant_id is None
+        assert request.state.auth_context.tenant_type == TenantType.PLATFORM
+        assert call_next.called

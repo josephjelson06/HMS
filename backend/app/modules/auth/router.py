@@ -103,7 +103,7 @@ async def start_impersonation(
     current_user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
-    if current_user.user_type != "platform":
+    if current_user.user_type not in {"platform", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can impersonate")
     if current_user.impersonation and current_user.impersonation.get("active"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Impersonation already active")
@@ -165,29 +165,39 @@ async def me(
         permissions=current_user.permissions,
         tenant=tenant,
         impersonation=current_user.impersonation,
+        must_reset_password=current_user.must_reset_password,
     )
 
 
 @router.post("/password/change", response_model=PasswordChangeResponse)
 async def change_password(
     payload: PasswordChangeRequest,
+    response: Response,
     request: Request,
     current_user = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Change the current user's password. Revokes all active sessions."""
     service = AuthService(session, request)
-    await service.change_password(
+    result = await service.change_password(
         user_id=current_user.id,
         current_password=payload.current_password,
         new_password=payload.new_password,
     )
+
+    # Issue fresh cookies so the user can continue without manually re-logging in.
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     
     await audit_event_stub(
         action="password.changed",
         session=session,
         metadata={"user_id": str(current_user.id)},
     )
+
+    # audit_event_stub only flushes; commit so the audit row persists.
+    await session.commit()
     
     return PasswordChangeResponse()
 
@@ -215,6 +225,9 @@ async def reset_password(
             "reset_by": str(current_user.id),
         },
     )
+
+    # audit_event_stub only flushes; commit so the audit row persists.
+    await session.commit()
     
     return PasswordResetResponse(temporary_password=temp_password)
 
@@ -246,6 +259,9 @@ async def invite_user(
             "invited_by": str(current_user.id),
         },
     )
+
+    # audit_event_stub only flushes; commit so the audit row persists.
+    await session.commit()
     
     return InviteUserResponse(
         user_id=user.id,

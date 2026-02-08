@@ -23,6 +23,7 @@ class CurrentUser:
     roles: list[str]
     permissions: list[str]
     impersonation: dict[str, Any] | None
+    must_reset_password: bool = False
 
 
 async def get_current_user(
@@ -62,6 +63,7 @@ async def get_current_user(
         last_name=user.last_name,
         user_type=user.user_type,
         tenant_id=user.tenant_id,
+        must_reset_password=bool(getattr(user, "must_reset_password", False)),
         roles=roles,
         permissions=permissions,
         impersonation=impersonation,

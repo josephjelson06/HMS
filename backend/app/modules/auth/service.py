@@ -203,7 +203,7 @@ class AuthService:
         actor_refresh_token: str | None = None,
     ) -> AuthResult:
         admin_user = await self.user_repo.get_by_id(admin_user_id)
-        if not admin_user or not admin_user.is_active or admin_user.user_type != "platform":
+        if not admin_user or not admin_user.is_active or admin_user.user_type not in {"platform", "admin"}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can impersonate")
 
         existing = await self.impersonation_repo.get_active_for_actor(admin_user_id)
@@ -323,7 +323,7 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid impersonation admin")
 
         admin_user = await self.user_repo.get_by_id(admin_uuid)
-        if not admin_user or not admin_user.is_active or admin_user.user_type != "platform":
+        if not admin_user or not admin_user.is_active or admin_user.user_type not in {"platform", "admin"}:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin user not found")
 
         await self.impersonation_repo.end(imp_session)
@@ -475,8 +475,12 @@ class AuthService:
             "target_user_id": str(session.acting_as_user_id),
         }
 
-    async def change_password(self, user_id: UUID, current_password: str, new_password: str) -> None:
-        """User changes their own password. Revokes all sessions."""
+    async def change_password(self, user_id: UUID, current_password: str, new_password: str) -> AuthResult:
+        """User changes their own password.
+        
+        Security: revoke all existing sessions (refresh token families/tokens) and issue a fresh
+        session for the user so the UX can continue without forcing a manual re-login.
+        """
         user = await self.user_repo.get_by_id(user_id)
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -501,8 +505,34 @@ class AuthService:
             user_id=user.id,
             reason="password_changed",
         )
-        
+
+        # Issue a fresh session for the user
+        roles = await self.perm_repo.get_role_names_for_user(user.id)
+        permissions = await self.perm_repo.get_permissions_for_user(user.id)
+        tenant = await self._get_tenant_context(user)
+
+        refresh_token_override = None
+        if user.tenant_id is not None:
+            family_result = await issue_new_refresh_token_family(
+                self.session,
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                refresh_token_days=settings.jwt_refresh_ttl_days,
+                created_by_user_id=user.id,
+            )
+            refresh_token_override = family_result.raw_token
+
+        result = await self._issue_auth_result(
+            user=user,
+            roles=roles,
+            permissions=permissions,
+            tenant=tenant,
+            impersonation=None,
+            refresh_token_override=refresh_token_override,
+        )
+
         await self.session.commit()
+        return result
 
     async def reset_password(self, target_user_id: UUID, admin_user_id: UUID) -> str:
         """Admin resets a user's password. Returns temporary password. Revokes all sessions."""

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from uuid import UUID
 from typing import Any
 
@@ -18,6 +18,13 @@ class AuditLogOut(BaseModel):
     created_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("ip_address", mode="before")
+    @classmethod
+    def normalize_ip_address(cls, value):
+        if value is None:
+            return None
+        return str(value)
 
 
 class Pagination(BaseModel):
