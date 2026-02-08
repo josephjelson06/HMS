@@ -1,10 +1,10 @@
 # HMS AuthModule Integration Context
 
 ## Current Snapshot
-- Timestamp: 2026-02-08T19:00:00+05:30
-- Current branch: `master`
-- Current commit: `29c845df86e1fc530c21759c241fe86dc0c1ff68`
-- Working tree note: untracked local planning file present (`CompletePlan.md`)
+- Timestamp: 2026-02-08T23:07:25+05:30
+- Current branch: `hardening/rc1`
+- Current commit: `8632d268f26416ff415af8b65eda5cd8e7e94377`
+- Working tree note: untracked local planning files present (`CompletePlan.md`, `Context.md`)
 
 ## Merged / Open PRs
 
@@ -74,20 +74,19 @@
 ## Validation Commands and Latest Results
 
 ### Backend
-- Command:
+- Command (ensure env vars are set: `DATABASE_URL`, `JWT_SECRET` (>=32 chars), `SEED_DATA=false`):
   - `cd backend`
-  - `$env:DATABASE_URL='postgresql+asyncpg://hms:devpassword@localhost:5432/hms'`
-  - `$env:JWT_SECRET='<redacted>'`
-  - `$env:SEED_DATA='false'`
   - `python -m pytest -q`
-- Result: `149 passed, 1 skipped`
+- Result: `152 passed, 1 skipped`
 
-- Command:
+- Command (ensure env vars are set: `DATABASE_URL`, `JWT_SECRET` (>=32 chars)):
   - `cd backend`
-  - `$env:DATABASE_URL='postgresql+asyncpg://hms:devpassword@localhost:5432/hms'`
-  - `$env:JWT_SECRET='<redacted>'`
   - `python -m alembic heads`
 - Result: single head `0021_backfill_refresh_token_families (head)`
+
+- Command (live API smoke gate; requires backend running with seeded data):
+  - `python backend/scripts/smoke_api.py --base-url http://127.0.0.1:8000/api`
+- Result: `OK` (0 failures)
 
 ### Frontend
 - Command: `cd frontend && npm run lint`
@@ -96,20 +95,24 @@
 - Command: `cd frontend && npm run build`
 - Result: success, includes `/change-password` route
 
+- Command: `cd frontend && npm run test:e2e`
+- Result: `2 passed` (Chromium)
+
 ## Known Risks / Follow-ups
-1. End-to-end browser/API smoke tests for full login -> forced reset -> dashboard and full impersonation lifecycle should be run against a live environment with seeded data and cookie flows.
+1. Security hardening is still in progress: leaked artifacts exist in git history and must be purged via history rewrite (see `docs/security/reports/gitleaks-history.json`).
 2. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
-3. Existing local untracked file `CompletePlan.md` remains and is intentionally untouched.
+3. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
+4. Existing local untracked file `CompletePlan.md` remains and is intentionally untouched.
 
 ## Next-Session Start Instructions
 1. Start from `master` and pull latest:
    - `git checkout master`
    - `git pull --ff-only`
-2. Verify PR state quickly:
-   - `gh pr list --state open`
-3. Re-run quality gates before additional auth changes:
-   - backend pytest + alembic head check
-   - frontend lint + build
-4. If continuing hardening, prioritize live smoke scenarios:
-   - impersonation start -> refresh rotations -> stop
-   - forced reset login flow and workspace guard behavior
+2. Re-run quality gates:
+   - backend: `python -m pytest -q`, `python -m alembic heads`
+   - frontend: `npm run lint`, `npm run build`, `npm run test:e2e`
+3. Re-run live API smoke gate against a disposable DB:
+   - `python backend/scripts/smoke_api.py --base-url http://127.0.0.1:8000/api`
+4. Continue security phase:
+   - purge leaked artifacts from history (rewrite) then re-run gitleaks history scan
+   - upgrade Next to remove HIGH audit findings
