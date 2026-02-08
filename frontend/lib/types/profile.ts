@@ -11,6 +11,4 @@ export interface Profile {
 export interface ProfileUpdate {
   first_name?: string | null;
   last_name?: string | null;
-  current_password?: string | null;
-  new_password?: string | null;
 }
