@@ -9,7 +9,7 @@ import { UserTypeGuard } from "@/components/features/auth/permission-guard";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <UserTypeGuard userType="admin">
+    <UserTypeGuard userType="platform">
       <AppFrame variant="admin">
         <div className="min-w-0">
           <Navbar />

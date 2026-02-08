@@ -256,7 +256,7 @@ class ReportService:
     async def _overview_metrics(self, date_from: datetime | None, date_to: datetime | None) -> list[dict[str, Any]]:
         total_hotels = await self.session.scalar(select(func.count()).select_from(Tenant))
         total_admins = await self.session.scalar(
-            select(func.count()).select_from(User).where(User.user_type == "admin")
+            select(func.count()).select_from(User).where(User.user_type == "platform")
         )
         total_hotel_users = await self.session.scalar(
             select(func.count()).select_from(User).where(User.user_type == "hotel")

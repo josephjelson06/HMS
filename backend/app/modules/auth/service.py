@@ -86,11 +86,11 @@ class AuthService:
         impersonation = None
         if stored.impersonation_session_id and stored.impersonated_by_user_id:
             imp_session = await self.impersonation_repo.get_active_by_id(stored.impersonation_session_id)
-            if not imp_session or str(imp_session.target_user_id) != str(user.id):
+            if not imp_session or str(imp_session.acting_as_user_id) != str(user.id):
                 await self.token_repo.revoke(stored)
                 await self.session.commit()
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Impersonation session ended")
-            imp_tenant = await self.session.get(Tenant, imp_session.target_tenant_id)
+            imp_tenant = await self.session.get(Tenant, imp_session.tenant_id)
             impersonation = self._build_impersonation_context(imp_session, imp_tenant)
 
         new_refresh_token, new_refresh_jti = create_refresh_token()
@@ -128,10 +128,10 @@ class AuthService:
         reason: str | None,
     ) -> AuthResult:
         admin_user = await self.user_repo.get_by_id(admin_user_id)
-        if not admin_user or not admin_user.is_active or admin_user.user_type != "admin":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can impersonate")
+        if not admin_user or not admin_user.is_active or admin_user.user_type != "platform":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can impersonate")
 
-        existing = await self.impersonation_repo.get_active_for_admin(admin_user_id)
+        existing = await self.impersonation_repo.get_active_for_actor(admin_user_id)
         if existing:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An impersonation session is already active")
 
@@ -157,9 +157,9 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
         imp_session = await self.impersonation_repo.create(
-            admin_user_id=admin_user.id,
-            target_user_id=target_user.id,
-            target_tenant_id=target_user.tenant_id,
+            actor_user_id=admin_user.id,
+            acting_as_user_id=target_user.id,
+            tenant_id=target_user.tenant_id,
             reason=reason,
             ip_address=self.request.client.host if self.request.client else None,
         )
@@ -167,11 +167,11 @@ class AuthService:
         self.session.add(
             AuditLog(
                 tenant_id=target_user.tenant_id,
-                user_id=admin_user.id,
+                actor_user_id=admin_user.id,
                 action="impersonation.started",
                 resource_type="impersonation_session",
                 resource_id=imp_session.id,
-                changes={
+                metadata_json={
                     "target_user_id": str(target_user.id),
                     "target_user_email": target_user.email,
                     "target_tenant_id": str(target_user.tenant_id),
@@ -224,13 +224,13 @@ class AuthService:
         if not imp_session:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Impersonation session not found")
 
-        if str(imp_session.target_user_id) != str(acting_user_id):
+        if str(imp_session.acting_as_user_id) != str(acting_user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid impersonation actor")
-        if str(imp_session.admin_user_id) != str(admin_uuid):
+        if str(imp_session.actor_user_id) != str(admin_uuid):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid impersonation admin")
 
         admin_user = await self.user_repo.get_by_id(admin_uuid)
-        if not admin_user or not admin_user.is_active or admin_user.user_type != "admin":
+        if not admin_user or not admin_user.is_active or admin_user.user_type != "platform":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin user not found")
 
         await self.impersonation_repo.end(imp_session)
@@ -242,13 +242,13 @@ class AuthService:
 
         self.session.add(
             AuditLog(
-                tenant_id=imp_session.target_tenant_id,
-                user_id=admin_user.id,
+                tenant_id=imp_session.tenant_id,
+                actor_user_id=admin_user.id,
                 action="impersonation.ended",
                 resource_type="impersonation_session",
                 resource_id=imp_session.id,
-                changes={
-                    "target_user_id": str(imp_session.target_user_id),
+                metadata_json={
+                    "target_user_id": str(imp_session.acting_as_user_id),
                 },
                 ip_address=self.request.client.host if self.request.client else None,
                 user_agent=self.request.headers.get("user-agent"),
@@ -345,10 +345,10 @@ class AuthService:
     def _build_impersonation_context(session, tenant: Tenant | None) -> dict:
         return {
             "active": True,
-            "tenant_id": str(session.target_tenant_id),
+            "tenant_id": str(session.tenant_id),
             "tenant_name": tenant.name if tenant else "Unknown Tenant",
             "session_id": str(session.id),
             "started_at": session.started_at.isoformat() if session.started_at else datetime.now(timezone.utc).isoformat(),
-            "admin_user_id": str(session.admin_user_id),
-            "target_user_id": str(session.target_user_id),
+            "admin_user_id": str(session.actor_user_id),
+            "target_user_id": str(session.acting_as_user_id),
         }
