@@ -229,10 +229,11 @@ async def seed_initial_data(session: AsyncSession) -> None:
     if not admin_user:
         admin_user = User(
             email=settings.admin_seed_email,
+            username="admin",
             password_hash=hash_password(settings.admin_seed_password),
             first_name="Admin",
             last_name="User",
-            user_type="admin",
+            user_type="platform",
             tenant_id=None,
             is_active=True,
         )
@@ -243,6 +244,7 @@ async def seed_initial_data(session: AsyncSession) -> None:
     if not hotel_user:
         hotel_user = User(
             email=settings.hotel_seed_email,
+            username="manager",
             password_hash=hash_password(settings.hotel_seed_password),
             first_name="Hotel",
             last_name="Manager",

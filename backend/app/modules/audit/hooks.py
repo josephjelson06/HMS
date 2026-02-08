@@ -1,56 +1,63 @@
-"""Audit event hooks for tracking security-sensitive operations.
+from __future__ import annotations
 
-This module provides utilities for logging audit events.
-"""
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit import AuditLog
+from app.modules.audit.context import get_audit_runtime_context
 
 
 async def audit_event_stub(
-    action: str,
     *,
-    session: AsyncSession,
-    user_id: str | None = None,
-    tenant_id: str | None = None,
+    action: str,
+    session: AsyncSession | None = None,
+    metadata: dict[str, Any] | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    metadata: dict[str, Any] | None = None,
-    ip_address: str | None = None,
-    user_agent: str | None = None,
+    tenant_id: UUID | None = None,
+    actor_user_id: UUID | None = None,
+    acting_as_user_id: UUID | None = None,
 ) -> None:
-    """Log an audit event to the database.
+    """Emit an audit log entry using the current request's context.
     
-    This is a stub implementation that creates basic audit log entries.
-    A full implementation would include more sophisticated features like:
-    - Automatic tenant/user extraction from context
-    - IP address extraction from request
-    - Structured metadata validation
-    - Async background processing
+    This is the primary audit API. Call it from anywhere in the request lifecycle:
     
-    Args:
-        action: The action being performed (e.g., "password.changed", "user.invited")
-        session: Database session
-        user_id: ID of the user performing the action
-        tenant_id: ID of the tenant context
-        resource_type: Type of resource being acted upon
-        resource_id: ID of the resource
-        metadata: Additional structured data about the event
-        ip_address: IP address of the client
-        user_agent: User agent string
+        await audit_event_stub(
+            action="user.created",
+            metadata={"email": user.email},
+            resource_type="user",
+            resource_id=str(user.id),
+        )
+    
+    Fields auto-populated from AuditRuntimeContext (if not explicitly provided):
+    - tenant_id
+    - actor_user_id
+    - acting_as_user_id
+    - ip_address
+    - user_agent
+    
+    HMS-specific fields (resource_type, resource_id) are passed explicitly.
     """
-    # Create audit log entry
-    audit_entry = AuditLog(
-        tenant_id=tenant_id,
-        user_id=user_id,
+    ctx = get_audit_runtime_context()
+    effective_session = session or (ctx.session if ctx else None)
+    
+    if effective_session is None:
+        # Not in a request context — silently skip.
+        # This allows audit calls in tests or CLI without crashing.
+        return
+
+    from app.modules.audit.service import append_audit_log
+
+    await append_audit_log(
+        session=effective_session,
         action=action,
-        resource_type=resource_type or "system",
+        tenant_id=tenant_id or (ctx.tenant_id if ctx else None),
+        actor_user_id=actor_user_id or (ctx.actor_user_id if ctx else None),
+        acting_as_user_id=acting_as_user_id or (ctx.acting_as_user_id if ctx else None),
+        metadata=metadata if metadata is not None else {},
+        resource_type=resource_type,
         resource_id=resource_id,
-        changes=metadata or {},
-        ip_address=ip_address,
-        user_agent=user_agent,
+        ip_address=ctx.ip_address if ctx else None,
+        user_agent=ctx.user_agent if ctx else None,
     )
-    session.add(audit_entry)
-    # Note: Caller is responsible for commit

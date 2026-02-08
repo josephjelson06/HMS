@@ -12,7 +12,7 @@ from app.models.room import Room
 from app.models.incident import Incident
 from app.models.rbac import Permission, Role, RolePermission, UserRole
 from app.models.tenant import Tenant
-from app.models.token import RefreshToken
+from app.models.token import RefreshToken, RefreshTokenFamily
 from app.models.user import User
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "AuditLog",
     "ImpersonationSession",
     "RefreshToken",
+    "RefreshTokenFamily",
     "Plan",
     "Subscription",
     "Invoice",

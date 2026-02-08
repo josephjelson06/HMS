@@ -14,16 +14,16 @@ class ImpersonationSessionRepository:
     async def create(
         self,
         *,
-        admin_user_id: UUID,
-        target_user_id: UUID,
-        target_tenant_id: UUID,
+        actor_user_id: UUID,
+        acting_as_user_id: UUID,
+        tenant_id: UUID,
         reason: str | None,
         ip_address: str | None,
     ) -> ImpersonationSession:
         session = ImpersonationSession(
-            admin_user_id=admin_user_id,
-            target_user_id=target_user_id,
-            target_tenant_id=target_tenant_id,
+            actor_user_id=actor_user_id,
+            acting_as_user_id=acting_as_user_id,
+            tenant_id=tenant_id,
             reason=reason,
             ip_address=ip_address,
         )
@@ -39,11 +39,11 @@ class ImpersonationSessionRepository:
         )
         return await self.session.scalar(stmt)
 
-    async def get_active_for_admin(self, admin_user_id: UUID) -> ImpersonationSession | None:
+    async def get_active_for_actor(self, actor_user_id: UUID) -> ImpersonationSession | None:
         stmt = (
             select(ImpersonationSession)
             .where(
-                ImpersonationSession.admin_user_id == admin_user_id,
+                ImpersonationSession.actor_user_id == actor_user_id,
                 ImpersonationSession.ended_at.is_(None),
             )
             .order_by(ImpersonationSession.started_at.desc())
