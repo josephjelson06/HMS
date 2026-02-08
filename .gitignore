@@ -35,6 +35,10 @@ backend_logs.txt
 .DS_Store
 Thumbs.db
 
+# Local planning docs (kept out of git history)
+CompletePlan.md
+Context.md
+
 # Node
 node_modules/
 npm-debug.log
