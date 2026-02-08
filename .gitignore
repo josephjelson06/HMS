@@ -50,6 +50,9 @@ test-results/
 
 # Security scan outputs (may contain sensitive strings even when redacted)
 docs/security/reports/*.json
+docs/security/reports/*.html
+docs/security/reports/*.xml
+zap*.yaml
 
 # Database
 db.sqlite3

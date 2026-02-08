@@ -103,7 +103,7 @@
 - Phase 4.1 (reduce scan noise): completed (cleaned build artifacts; working-tree gitleaks clean)
 - Phase 4.2 (rewrite git history; purge leaks): completed (gitleaks git/history clean; remote branches pointing to old history deleted)
 - Phase 4.3 (secrets rotation runbook): completed (`docs/runbooks/secrets.md`, updated `.env.example` guidance)
-- Phase 4.4 (DAST baseline): pending (OWASP ZAP)
+- Phase 4.4 (DAST baseline): completed (OWASP ZAP baseline; summary in `docs/security/zap_baseline.md`)
 - Phase 4.5 (auth-negative regression automation): pending
 - Phase 4.6 (Next.js upgrade to address npm audit HIGH): pending
 - Phase 5 (performance + reliability): pending
@@ -111,7 +111,7 @@
 
 ## Known Risks / Follow-ups
 1. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
-2. DAST baseline (OWASP ZAP) and auth-negative regression tests are still pending.
+2. Auth-negative regression tests are still pending.
 3. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
 
 ## Next-Session Start Instructions
