@@ -1,4 +1,8 @@
-﻿from datetime import datetime, timedelta, timezone
+﻿# DEPRECATED: Token operations are migrating to app.modules.auth.refresh_tokens.
+# This repository is kept for backward compatibility during migration.
+# New code should use the refresh_tokens module instead.
+
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select

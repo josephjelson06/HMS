@@ -1,8 +1,8 @@
-﻿import datetime
+import datetime
 import uuid
 
 from sqlalchemy import DateTime, ForeignKey, String, text
-from sqlalchemy.dialects.postgresql import UUID, INET
+from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -10,6 +10,8 @@ from app.models.base import Base
 
 
 class RefreshTokenFamily(Base):
+    """A family groups all refresh tokens from a single login session."""
+
     __tablename__ = "refresh_token_families"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
