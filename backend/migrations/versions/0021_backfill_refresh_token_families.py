@@ -1,7 +1,7 @@
 """Backfill existing refresh tokens into families
 
-Revision ID: 0016_backfill_refresh_token_families
-Revises: 0015_refresh_token_families
+Revision ID: 0021_backfill_refresh_token_families
+Revises: 0020_migrate_user_type
 Create Date: 2026-02-07 00:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 
-revision = "0016_backfill_refresh_token_families"
-down_revision = "0015_refresh_token_families"
+revision = "0021_backfill_refresh_token_families"
+down_revision = "0020_migrate_user_type"
 branch_labels = None
 depends_on = None
 
