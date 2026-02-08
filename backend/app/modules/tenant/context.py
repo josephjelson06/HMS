@@ -45,8 +45,11 @@ def resolve_auth_context_from_claims(claims: dict | None) -> AuthContext | None:
     if claims is None:
         return None
 
-    # Extract user_type and convert to TenantType
-    user_type_str = claims.get("user_type", "hotel")
+    # Extract user_type and convert to TenantType.
+    # Transitional compatibility: legacy "admin" user_type should be treated as "platform".
+    user_type_str = claims.get("user_type", "hotel") or "hotel"
+    if user_type_str == "admin":
+        user_type_str = "platform"
     try:
         tenant_type = TenantType(user_type_str)
     except ValueError:

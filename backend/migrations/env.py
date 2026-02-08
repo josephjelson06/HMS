@@ -45,6 +45,34 @@ def do_run_migrations(connection) -> None:
     )
 
     with context.begin_transaction():
+        # Alembic's default `alembic_version.version_num` is VARCHAR(32), which is too
+        # short for long revision identifiers. Pre-create/upgrade it inside Alembic's
+        # managed transaction so the DDL is committed alongside migrations.
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS alembic_version (
+                version_num VARCHAR(64) NOT NULL PRIMARY KEY
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)"
+        )
+        connection.exec_driver_sql(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conrelid = 'alembic_version'::regclass
+                      AND contype = 'p'
+                ) THEN
+                    ALTER TABLE alembic_version ADD PRIMARY KEY (version_num);
+                END IF;
+            END $$;
+            """
+        )
         context.run_migrations()
 
 
