@@ -18,6 +18,9 @@ ENV/
 # Environment variables
 .env
 .env.local
+.tmp_*.json
+*.cookies
+backend_logs.txt
 
 # IDEs
 .vscode/
@@ -36,6 +39,10 @@ Thumbs.db
 node_modules/
 npm-debug.log
 .next/
+frontend/.next_stale_*/
+playwright-report/
+test-results/
+.playwright/
 
 # Database
 db.sqlite3
