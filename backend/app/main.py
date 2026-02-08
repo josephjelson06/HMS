@@ -8,6 +8,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.seed import seed_initial_data
 from app.middleware.auth import JwtPayloadMiddleware
 from app.middleware.csrf import CsrfMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.modules.tenant.middleware import TenantContextMiddleware
 from app.modules.auth.router import router as auth_router
 from app.modules.admin.dashboard.router import router as admin_dashboard_router
@@ -60,6 +61,9 @@ def create_app() -> FastAPI:
         await stop_report_export_worker()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+    # Must be added before other middlewares so it also wraps early returns.
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
