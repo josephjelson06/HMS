@@ -23,7 +23,9 @@ export default function LoginForm() {
     setSubmitting(true);
     try {
       const response = await login(email, password);
-      const target = response.user.user_type === "admin" ? "/admin/dashboard" : "/hotel/dashboard";
+      const isPlatformUser =
+        response.user.user_type === "platform" || response.user.user_type === "admin";
+      const target = isPlatformUser ? "/admin/dashboard" : "/hotel/dashboard";
       router.push(target);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Login failed";
