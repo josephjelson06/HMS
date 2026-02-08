@@ -1,7 +1,6 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session
 from app.models.tenant import Tenant
 from app.modules.auth.dependencies import CurrentUser, get_current_user, require_permission
@@ -14,48 +13,22 @@ from app.modules.auth.schemas import (
     UserOut,
 )
 from app.modules.auth.service import AuthService
+from app.modules.auth.tokens import (
+    set_access_token_cookie,
+    set_refresh_token_cookie,
+    set_csrf_token_cookie,
+    clear_auth_cookies,
+)
 
 
 router = APIRouter()
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str, csrf_token: str) -> None:
-    response.set_cookie(
-        "access_token",
-        access_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_access_ttl_minutes * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-    response.set_cookie(
-        "refresh_token",
-        refresh_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_refresh_ttl_days * 24 * 60 * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-    response.set_cookie(
-        "csrf_token",
-        csrf_token,
-        httponly=False,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_refresh_ttl_days * 24 * 60 * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-
-
-def clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/", domain=settings.cookie_domain)
-    response.delete_cookie("refresh_token", path="/", domain=settings.cookie_domain)
-    response.delete_cookie("csrf_token", path="/", domain=settings.cookie_domain)
+@router.get("/csrf", summary="Issue CSRF cookie for double-submit protection")
+async def csrf_cookie() -> dict[str, bool]:
+    """Returns a response that triggers the CSRF middleware to set a csrf_token cookie.
+    Call this endpoint before making your first mutating request if you don't have a CSRF cookie yet."""
+    return {"csrf_cookie_issued": True}
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -67,7 +40,9 @@ async def login(
 ) -> AuthResponse:
     service = AuthService(session, request)
     result = await service.login(payload.email, payload.password)
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -79,8 +54,16 @@ async def refresh(
 ) -> AuthResponse:
     refresh_token = request.cookies.get("refresh_token")
     service = AuthService(session, request)
-    result = await service.refresh(refresh_token)
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    try:
+        result = await service.refresh(refresh_token)
+    except HTTPException as exc:
+        # If reuse is detected, clear cookies to force re-login
+        if "reuse detected" in str(exc.detail).lower():
+            clear_auth_cookies(response)
+        raise
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -109,8 +92,8 @@ async def start_impersonation(
     current_user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
-    if current_user.user_type != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can impersonate")
+    if current_user.user_type != "platform":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can impersonate")
     if current_user.impersonation and current_user.impersonation.get("active"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Impersonation already active")
 
@@ -121,7 +104,9 @@ async def start_impersonation(
         target_user_id=payload.target_user_id,
         reason=payload.reason,
     )
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -138,7 +123,9 @@ async def stop_impersonation(
         impersonation=current_user.impersonation,
         current_refresh_token=request.cookies.get("refresh_token"),
     )
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 

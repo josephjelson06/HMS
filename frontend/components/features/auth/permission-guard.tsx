@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { AccessDeniedState } from "@/components/ui/composed/access-denied-state";
 import { useAuth } from "@/lib/hooks/use-auth";
+import type { UserType } from "@/lib/types/auth";
 import { hasPermission } from "@/lib/utils/permissions";
 
 export function PermissionGuard({
@@ -30,14 +31,20 @@ export function UserTypeGuard({
   children,
   fallback = null
 }: {
-  userType: "admin" | "hotel";
+  userType: UserType;
   children: ReactNode;
   fallback?: ReactNode;
 }) {
   const { user, loading } = useAuth();
 
   if (loading) return null;
-  if (user && user.user_type === userType) {
+  const matchesUserType = (actual: UserType, expected: UserType): boolean => {
+    if (expected === "platform") return actual === "platform" || actual === "admin";
+    if (expected === "admin") return actual === "admin" || actual === "platform";
+    return actual === "hotel";
+  };
+
+  if (user && matchesUserType(user.user_type, userType)) {
     return <>{children}</>;
   }
 

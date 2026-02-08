@@ -70,7 +70,7 @@ async def get_user(
         ) from exc
 
     user = await service.get(user_uuid)
-    if not user or user.user_type != "admin":
+    if not user or user.user_type != "platform":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
@@ -120,7 +120,7 @@ async def update_user(
         ) from exc
 
     user = await service.get(user_uuid)
-    if not user or user.user_type != "admin":
+    if not user or user.user_type != "platform":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
@@ -154,7 +154,7 @@ async def delete_user(
         ) from exc
 
     user = await service.get(user_uuid)
-    if not user or user.user_type != "admin":
+    if not user or user.user_type != "platform":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )

@@ -2,6 +2,7 @@
 from starlette.requests import Request
 
 from app.core.security import decode_access_token
+from app.modules.auth.tokens import AccessTokenClaims, AccessTokenError, decode_access_token as decode_token_strict
 
 
 def extract_token(request: Request) -> str | None:
@@ -16,4 +17,11 @@ class JwtPayloadMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         token = extract_token(request)
         request.state.token_payload = decode_access_token(token) if token else None
+        
+        # Also store typed claims for the new dependency
+        try:
+            request.state.token_claims = decode_token_strict(token) if token else None
+        except AccessTokenError:
+            request.state.token_claims = None
+        
         return await call_next(request)
