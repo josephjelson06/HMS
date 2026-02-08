@@ -94,7 +94,7 @@ def decode_access_token(token: str) -> AccessTokenClaims:
     """Decode and strictly validate a JWT access token.
     
     Unlike the old decode_access_token() which returned dict|None,
-    this raises AccessTokenError on any problem — no silent failures.
+    this raises AccessTokenError on any problem - no silent failures.
     """
     try:
         payload = jwt.decode(
@@ -200,3 +200,4 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie("access_token", path="/", domain=settings.cookie_domain)
     response.delete_cookie("refresh_token", path="/", domain=settings.cookie_domain)
     response.delete_cookie("csrf_token", path="/", domain=settings.cookie_domain)
+

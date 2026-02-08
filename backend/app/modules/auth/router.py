@@ -1,7 +1,6 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session
 from app.models.tenant import Tenant
 from app.modules.auth.dependencies import CurrentUser, get_current_user, require_permission
@@ -23,6 +22,13 @@ from app.modules.auth.tokens import (
 
 
 router = APIRouter()
+
+
+@router.get("/csrf", summary="Issue CSRF cookie for double-submit protection")
+async def csrf_cookie() -> dict[str, bool]:
+    """Returns a response that triggers the CSRF middleware to set a csrf_token cookie.
+    Call this endpoint before making your first mutating request if you don't have a CSRF cookie yet."""
+    return {"csrf_cookie_issued": True}
 
 
 @router.post("/login", response_model=AuthResponse)
