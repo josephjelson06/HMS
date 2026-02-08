@@ -1,10 +1,10 @@
 # HMS AuthModule Integration Context
 
 ## Current Snapshot
-- Timestamp: 2026-02-08T23:07:25+05:30
-- Current branch: `hardening/rc1`
-- Current commit: `8632d268f26416ff415af8b65eda5cd8e7e94377`
-- Working tree note: untracked local planning files present (`CompletePlan.md`, `Context.md`)
+- Timestamp: 2026-02-09T00:06:00+05:30
+- Current branch: `master`
+- Current commit: run `git rev-parse HEAD`
+- Note: git history was rewritten to purge leaked artifacts. Any commit SHAs captured before the rewrite are no longer valid.
 
 ## Merged / Open PRs
 
@@ -22,15 +22,12 @@
 - PR #11: Family-linked impersonation refactor
   - URL: https://github.com/josephjelson06/HMS/pull/11
   - Merged at: 2026-02-08T13:18:37Z
-  - Merge commit: `fb8f31d9ce003b0c5673747647da9e646fbf0ed9`
 - PR #12: Frontend auth hardening (CSRF preflight + forced reset flow)
   - URL: https://github.com/josephjelson06/HMS/pull/12
   - Merged at: 2026-02-08T13:25:47Z
-  - Merge commit: `8729300d873c145c6303348522021e0cb21a6a90`
 - PR #13: Context handoff document
   - URL: https://github.com/josephjelson06/HMS/pull/13
   - Merged at: 2026-02-08T13:28:39Z
-  - Merge commit: `29c845df86e1fc530c21759c241fe86dc0c1ff68`
 
 ### Open
 - None
@@ -98,14 +95,30 @@
 - Command: `cd frontend && npm run test:e2e`
 - Result: `2 passed` (Chromium)
 
+## Hardening Phase Status (Auth + Security)
+- Phase 1 (migrations): completed
+- Phase 2 (automated regression gates): completed
+- Phase 3A (API smoke gate): completed (`backend/scripts/smoke_api.py`)
+- Phase 3B (frontend E2E, Chromium): completed (Playwright)
+- Phase 4.1 (reduce scan noise): completed (cleaned build artifacts; working-tree gitleaks clean)
+- Phase 4.2 (rewrite git history; purge leaks): completed (gitleaks git/history clean; remote branches pointing to old history deleted)
+- Phase 4.3 (secrets rotation runbook): completed (`docs/runbooks/secrets.md`, updated `.env.example` guidance)
+- Phase 4.4 (DAST baseline): pending (OWASP ZAP)
+- Phase 4.5 (auth-negative regression automation): pending
+- Phase 4.6 (Next.js upgrade to address npm audit HIGH): pending
+- Phase 5 (performance + reliability): pending
+- Phase 6 (release readiness): pending
+
 ## Known Risks / Follow-ups
-1. Security hardening is still in progress: leaked artifacts exist in git history and must be purged via history rewrite (see `docs/security/reports/gitleaks-history.json`).
-2. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
-3. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
-4. Existing local untracked file `CompletePlan.md` remains and is intentionally untouched.
+1. Next.js production audit still reports HIGH vulnerabilities on Next 14; planned fix is upgrade to Next 16.x (see `docs/security/reports/npm-audit-prod.json`).
+2. DAST baseline (OWASP ZAP) and auth-negative regression tests are still pending.
+3. Backend profile update endpoints still accept password fields; frontend no longer uses them. If desired, enforce backend-level canonicalization later by deprecating password fields in profile schemas/services.
 
 ## Next-Session Start Instructions
-1. Start from `master` and pull latest:
+1. If you cloned before the history rewrite:
+   - Prefer a fresh clone.
+   - If you must keep your clone, back up local work and then realign to `origin/master`.
+2. Start from `master` and pull latest:
    - `git checkout master`
    - `git pull --ff-only`
 2. Re-run quality gates:
@@ -114,5 +127,6 @@
 3. Re-run live API smoke gate against a disposable DB:
    - `python backend/scripts/smoke_api.py --base-url http://127.0.0.1:8000/api`
 4. Continue security phase:
-   - purge leaked artifacts from history (rewrite) then re-run gitleaks history scan
+   - run OWASP ZAP baseline
+   - add auth-negative regression tests
    - upgrade Next to remove HIGH audit findings
