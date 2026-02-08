@@ -124,7 +124,14 @@
 - Phase 4.4 (DAST baseline): completed (OWASP ZAP baseline; summary in `docs/security/zap_baseline.md`)
 - Phase 4.5 (auth-negative regression automation): completed (`backend/tests/system/test_auth_negative_regressions.py`)
 - Phase 4.6 (Next.js upgrade to address npm audit HIGH): completed (upgraded to Next 16.x; `npm audit --omit=dev` clean)
-- Phase 5 (performance + reliability): pending
+- Phase 5.1 (perf env readiness): completed (`docs/runbooks/performance.md`, `scripts/perf/New-HmsPerfDb.ps1`)
+- Phase 5.2 (k6 suite): pending
+- Phase 5.3 (baseline run): pending
+- Phase 5.4 (steady-state load): pending
+- Phase 5.5 (spike test): pending
+- Phase 5.6 (endurance soak): pending
+- Phase 5.7 (recovery / restart checks): pending
+- Phase 5.8 (perf report + thresholds): pending
 - Phase 6 (release readiness): pending
 
 ## Known Risks / Follow-ups
