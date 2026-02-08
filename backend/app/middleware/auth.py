@@ -1,4 +1,4 @@
-﻿from uuid import UUID
+from uuid import UUID
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -9,6 +9,8 @@ from app.modules.audit.context import (
     clear_audit_runtime_context,
     set_audit_runtime_context,
 )
+from app.modules.auth.tokens import AccessTokenClaims, AccessTokenError, decode_access_token as decode_token_strict
+from app.modules.tenant.context import resolve_auth_context_from_claims
 
 
 def extract_token(request: Request) -> str | None:
@@ -19,50 +21,45 @@ def extract_token(request: Request) -> str | None:
     return request.cookies.get("access_token")
 
 
+def _to_uuid(value: object) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
 class JwtPayloadMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         token = extract_token(request)
         token_payload = decode_access_token(token) if token else None
         request.state.token_payload = token_payload
-        
-        # Set up audit runtime context for this request
-        # Extract values from token_payload for audit logging
-        tenant_id = None
-        actor_user_id = None
+
+        # Store typed claims for strict auth dependencies.
+        try:
+            request.state.token_claims = decode_token_strict(token) if token else None
+        except AccessTokenError:
+            request.state.token_claims = None
+
+        # Also provide lightweight auth context from claims (no DB lookup).
+        request.state.auth_context = resolve_auth_context_from_claims(token_payload)
+
+        # Populate request-scoped audit context from JWT claims.
+        tenant_id = _to_uuid(token_payload.get("tenant_id")) if isinstance(token_payload, dict) else None
+        actor_user_id = _to_uuid(token_payload.get("sub")) if isinstance(token_payload, dict) else None
         acting_as_user_id = None
-        
-        if token_payload:
-            # Get tenant_id from token
-            tenant_id_str = token_payload.get("tenant_id")
-            if tenant_id_str:
-                try:
-                    tenant_id = UUID(tenant_id_str)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Get user_id as actor_user_id
-            user_id_str = token_payload.get("user_id")
-            if user_id_str:
-                try:
-                    actor_user_id = UUID(user_id_str)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Get impersonation info if present
+
+        if isinstance(token_payload, dict):
             impersonation = token_payload.get("impersonation")
-            if impersonation and isinstance(impersonation, dict):
-                impersonated_by_str = impersonation.get("impersonated_by")
-                if impersonated_by_str:
-                    try:
-                        # When impersonating, the actual admin is stored in acting_as_user_id
-                        acting_as_user_id = UUID(impersonated_by_str)
-                    except (ValueError, TypeError):
-                        pass
-        
-        # Session will be None here - it gets passed explicitly to audit_event_stub
-        # or set later in the route handler
+            if isinstance(impersonation, dict):
+                impersonation_actor = _to_uuid(impersonation.get("actor_user_id"))
+                acting_as_user_id = _to_uuid(impersonation.get("acting_as_user_id"))
+                if impersonation_actor is not None:
+                    actor_user_id = impersonation_actor
+
         audit_ctx = AuditRuntimeContext(
-            session=None,  # Session managed separately
+            session=None,
             tenant_id=tenant_id,
             actor_user_id=actor_user_id,
             acting_as_user_id=acting_as_user_id,
@@ -70,9 +67,8 @@ class JwtPayloadMiddleware(BaseHTTPMiddleware):
             user_agent=request.headers.get("user-agent"),
         )
         set_audit_runtime_context(audit_ctx)
-        
+
         try:
-            response = await call_next(request)
-            return response
+            return await call_next(request)
         finally:
             clear_audit_runtime_context()

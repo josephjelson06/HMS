@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,6 +8,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.seed import seed_initial_data
 from app.middleware.auth import JwtPayloadMiddleware
 from app.middleware.csrf import CsrfMiddleware
+from app.modules.tenant.middleware import TenantContextMiddleware
 from app.modules.auth.router import router as auth_router
 from app.modules.admin.dashboard.router import router as admin_dashboard_router
 from app.modules.admin.hotels.router import router as admin_hotels_router
@@ -37,7 +40,26 @@ from app.workers.report_exports import start_report_export_worker, stop_report_e
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=settings.app_name)
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        # Startup: validate configuration first
+        settings.validate_startup_guards()
+
+        # Seed data (existing behavior)
+        if settings.seed_data:
+            async with AsyncSessionLocal() as session:
+                await seed_initial_data(session)
+
+        # Start background workers (existing behavior)
+        start_report_export_worker()
+
+        yield
+
+        # Shutdown: stop background workers (existing behavior)
+        await stop_report_export_worker()
+
+    app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -46,6 +68,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TenantContextMiddleware)
     app.add_middleware(JwtPayloadMiddleware)
     app.add_middleware(CsrfMiddleware)
 
@@ -80,17 +103,6 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
-
-    @app.on_event("startup")
-    async def startup_event() -> None:
-        if settings.seed_data:
-            async with AsyncSessionLocal() as session:
-                await seed_initial_data(session)
-        start_report_export_worker()
-
-    @app.on_event("shutdown")
-    async def shutdown_event() -> None:
-        await stop_report_export_worker()
 
     return app
 

@@ -1,4 +1,5 @@
-﻿export type UserType = "admin" | "hotel";
+// Keep "admin" as a legacy alias for backward compatibility during transition.
+export type UserType = "platform" | "admin" | "hotel";
 
 export interface TenantContext {
   id: string;
@@ -25,3 +26,4 @@ export interface UserContext {
   tenant_id?: string | null;
   roles: string[];
 }
+
