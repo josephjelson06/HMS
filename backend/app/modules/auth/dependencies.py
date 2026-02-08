@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import has_permission
 from app.core.database import get_session
+from app.modules.auth.tokens import AccessTokenClaims, AccessTokenError, decode_access_token as decode_token_strict
 from app.repositories.permission import PermissionRepository
 from app.repositories.user import UserRepository
 
@@ -74,3 +75,30 @@ def require_permission(permission_code: str):
         return current_user
 
     return checker
+
+
+async def require_access_token_claims(request: Request) -> AccessTokenClaims:
+    """FastAPI dependency that extracts and validates typed JWT claims from the request.
+    
+    Use this for routes that only need auth identity (no DB lookup for user profile).
+    For routes that need full user profile data, continue using get_current_user().
+    """
+    # First check if claims were already parsed by middleware
+    claims = getattr(request.state, "token_claims", None)
+    if isinstance(claims, AccessTokenClaims):
+        return claims
+
+    # Fall back to parsing from cookie
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token is required",
+        )
+    try:
+        return decode_token_strict(token)
+    except AccessTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token",
+        )

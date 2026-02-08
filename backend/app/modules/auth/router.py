@@ -1,7 +1,6 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session
 from app.models.tenant import Tenant
 from app.modules.auth.dependencies import CurrentUser, get_current_user, require_permission
@@ -14,6 +13,12 @@ from app.modules.auth.schemas import (
     UserOut,
 )
 from app.modules.auth.service import AuthService
+from app.modules.auth.tokens import (
+    set_access_token_cookie,
+    set_refresh_token_cookie,
+    set_csrf_token_cookie,
+    clear_auth_cookies,
+)
 
 
 router = APIRouter()
@@ -26,45 +31,6 @@ async def csrf_cookie() -> dict[str, bool]:
     return {"csrf_cookie_issued": True}
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str, csrf_token: str) -> None:
-    response.set_cookie(
-        "access_token",
-        access_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_access_ttl_minutes * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-    response.set_cookie(
-        "refresh_token",
-        refresh_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_refresh_ttl_days * 24 * 60 * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-    response.set_cookie(
-        "csrf_token",
-        csrf_token,
-        httponly=False,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_refresh_ttl_days * 24 * 60 * 60,
-        path="/",
-        domain=settings.cookie_domain,
-    )
-
-
-def clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/", domain=settings.cookie_domain)
-    response.delete_cookie("refresh_token", path="/", domain=settings.cookie_domain)
-    response.delete_cookie("csrf_token", path="/", domain=settings.cookie_domain)
-
-
 @router.post("/login", response_model=AuthResponse)
 async def login(
     payload: LoginRequest,
@@ -74,7 +40,9 @@ async def login(
 ) -> AuthResponse:
     service = AuthService(session, request)
     result = await service.login(payload.email, payload.password)
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -87,7 +55,9 @@ async def refresh(
     refresh_token = request.cookies.get("refresh_token")
     service = AuthService(session, request)
     result = await service.refresh(refresh_token)
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -128,7 +98,9 @@ async def start_impersonation(
         target_user_id=payload.target_user_id,
         reason=payload.reason,
     )
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
@@ -145,7 +117,9 @@ async def stop_impersonation(
         impersonation=current_user.impersonation,
         current_refresh_token=request.cookies.get("refresh_token"),
     )
-    set_auth_cookies(response, result.access_token, result.refresh_token, result.csrf_token)
+    set_access_token_cookie(response, token=result.access_token)
+    set_refresh_token_cookie(response, token=result.refresh_token)
+    set_csrf_token_cookie(response, token=result.csrf_token)
     return result.response
 
 
