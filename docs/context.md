@@ -1,9 +1,9 @@
 # HMS AuthModule Integration Context
 
 ## Current Snapshot
-- Timestamp: 2026-02-09T01:24:08+05:30
-- Current branch: `hardening/phase-4-6-next16`
-- Current commit: run `git rev-parse HEAD`
+- Timestamp: 2026-02-09T01:27:36+05:30
+- Current branch: `master`
+- Current commit: `3a7669cb6601cd90f61134eccb148b0f609dcfd6`
 - Note: git history was rewritten to purge leaked artifacts. Any commit SHAs captured before the rewrite are no longer valid.
 
 ## Merged / Open PRs
@@ -28,6 +28,21 @@
 - PR #13: Context handoff document
   - URL: https://github.com/josephjelson06/HMS/pull/13
   - Merged at: 2026-02-08T13:28:39Z
+- PR #14: Refresh context handoff snapshot after PR13
+  - URL: https://github.com/josephjelson06/HMS/pull/14
+  - Merged at: 2026-02-08T13:30:10Z
+- PR #15: Phase 4.3: Secrets rotation runbook
+  - URL: https://github.com/josephjelson06/HMS/pull/15
+  - Merged at: 2026-02-08T18:45:09Z
+- PR #16: Phase 4.4: OWASP ZAP baseline + security headers
+  - URL: https://github.com/josephjelson06/HMS/pull/16
+  - Merged at: 2026-02-08T19:16:54Z
+- PR #17: Phase 4.5: Auth-negative regression automation
+  - URL: https://github.com/josephjelson06/HMS/pull/17
+  - Merged at: 2026-02-08T19:27:26Z
+- PR #18: Next.js 16.1.6 upgrade (fix npm audit HIGH)
+  - URL: https://github.com/josephjelson06/HMS/pull/18
+  - Merged at: 2026-02-08T19:56:10Z
 
 ### Open
 - None
