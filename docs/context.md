@@ -128,7 +128,7 @@
 - Phase 4.5 (auth-negative regression automation): completed (`backend/tests/system/test_auth_negative_regressions.py`)
 - Phase 4.6 (Next.js upgrade to address npm audit HIGH): completed (upgraded to Next 16.x; `npm audit --omit=dev` clean)
 - Phase 5.1 (perf env readiness): completed (`docs/runbooks/performance.md`, `scripts/perf/New-HmsPerfDb.ps1`)
-- Phase 5.2 (k6 suite): pending
+- Phase 5.2 (k6 suite): completed (`scripts/perf/k6/hms_phase5.js`)
 - Phase 5.3 (baseline run): pending
 - Phase 5.4 (steady-state load): pending
 - Phase 5.5 (spike test): pending
