@@ -11,22 +11,24 @@ Defaults assume a backend at http://127.0.0.1:8000/api and frontend origin http:
 If running k6 inside Docker, set K6_BASE_URL=http://host.docker.internal:8000/api.
 */
 
-const BASE_URL = (__ENV.K6_BASE_URL || "http://127.0.0.1:8000/api").replace(/\/+$/, "");
-const ORIGIN = (__ENV.K6_ORIGIN || "http://localhost:3000").replace(/\/+$/, "");
+// Avoid K6_* env var names here because k6 reserves many of them (e.g., K6_DURATION),
+// and setting them can override scenario configuration unexpectedly.
+const BASE_URL = (__ENV.HMS_PERF_BASE_URL || "http://127.0.0.1:8000/api").replace(/\/+$/, "");
+const ORIGIN = (__ENV.HMS_PERF_ORIGIN || "http://localhost:3000").replace(/\/+$/, "");
 
 const ADMIN_EMAIL = __ENV.K6_ADMIN_EMAIL || "admin@demo.com";
 const ADMIN_PASSWORD = __ENV.K6_ADMIN_PASSWORD || "Admin123!";
 const HOTEL_EMAIL = __ENV.K6_HOTEL_EMAIL || "manager@demo.com";
 const HOTEL_PASSWORD = __ENV.K6_HOTEL_PASSWORD || "Manager123!";
 
-const DURATION = __ENV.K6_DURATION || "2m";
+const DURATION = __ENV.HMS_PERF_DURATION || "2m";
 
-const VUS_ADMIN = parseInt(__ENV.K6_VUS_ADMIN || "5", 10);
-const VUS_HOTEL_REFRESH = parseInt(__ENV.K6_VUS_HOTEL_REFRESH || "10", 10);
-const VUS_HOTEL_CRUD = parseInt(__ENV.K6_VUS_HOTEL_CRUD || "10", 10);
+const VUS_ADMIN = parseInt(__ENV.HMS_PERF_VUS_ADMIN || "5", 10);
+const VUS_HOTEL_REFRESH = parseInt(__ENV.HMS_PERF_VUS_HOTEL_REFRESH || "10", 10);
+const VUS_HOTEL_CRUD = parseInt(__ENV.HMS_PERF_VUS_HOTEL_CRUD || "10", 10);
 
-const THRESH_P95_REFRESH_MS = parseInt(__ENV.K6_THRESH_P95_REFRESH_MS || "250", 10);
-const THRESH_P95_CRUD_MS = parseInt(__ENV.K6_THRESH_P95_CRUD_MS || "400", 10);
+const THRESH_P95_REFRESH_MS = parseInt(__ENV.HMS_PERF_THRESH_P95_REFRESH_MS || "250", 10);
+const THRESH_P95_CRUD_MS = parseInt(__ENV.HMS_PERF_THRESH_P95_CRUD_MS || "400", 10);
 
 export const options = {
   discardResponseBodies: true,
@@ -64,9 +66,23 @@ function originHeaders() {
 
 function getCookieValue(jar, url, name) {
   const cookies = jar.cookiesForURL(url);
-  const values = cookies[name];
-  if (!values || values.length === 0) return null;
-  return values[0].value;
+  const raw = cookies[name];
+  if (!raw) return null;
+
+  // k6 may return cookie values in different shapes depending on API:
+  // - string (common for cookie jars)
+  // - array of { value } objects (common for response.cookies)
+  if (typeof raw === "string") return raw;
+
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return null;
+    const first = raw[0];
+    if (typeof first === "string") return first;
+    if (first && typeof first === "object" && typeof first.value === "string") return first.value;
+  }
+
+  if (raw && typeof raw === "object" && typeof raw.value === "string") return raw.value;
+  return null;
 }
 
 function ensureCsrfCookie(jar) {

@@ -116,6 +116,14 @@
 - Command: `cd frontend && npm audit --omit=dev`
 - Result: `found 0 vulnerabilities`
 
+### Performance (Phase 5)
+- Baseline k6 run (disposable DB: `hms_perf_20260209_083359`):
+  - `docker run --rm --network hms_default -e HMS_PERF_BASE_URL=http://hms-perf-backend:8000/api -e HMS_PERF_ORIGIN=http://localhost:3000 -e HMS_PERF_DURATION=30s -e HMS_PERF_VUS_ADMIN=1 -e HMS_PERF_VUS_HOTEL_REFRESH=1 -e HMS_PERF_VUS_HOTEL_CRUD=1 -v \"${PWD}\\scripts\\perf\\k6:/scripts\" grafana/k6 run /scripts/hms_phase5.js`
+- Result: PASS (http_req_failed=0%)
+  - p95 `POST /auth/refresh`: `40.9ms`
+  - p95 `POST /hotel/rooms/` (create): `46.44ms`
+  - p95 `GET /hotel/rooms/` (list): `18.31ms`
+
 ## Hardening Phase Status (Auth + Security)
 - Phase 1 (migrations): completed
 - Phase 2 (automated regression gates): completed
@@ -129,7 +137,7 @@
 - Phase 4.6 (Next.js upgrade to address npm audit HIGH): completed (upgraded to Next 16.x; `npm audit --omit=dev` clean)
 - Phase 5.1 (perf env readiness): completed (`docs/runbooks/performance.md`, `scripts/perf/New-HmsPerfDb.ps1`)
 - Phase 5.2 (k6 suite): completed (`scripts/perf/k6/hms_phase5.js`)
-- Phase 5.3 (baseline run): pending
+- Phase 5.3 (baseline run): completed (k6 baseline run at 3 VUs total / 30s)
 - Phase 5.4 (steady-state load): pending
 - Phase 5.5 (spike test): pending
 - Phase 5.6 (endurance soak): pending
